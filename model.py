@@ -87,18 +87,19 @@ class Model(nn.Module):
         dec_init_state = T.tanh(self.get_dec_init_state(dec_init_state))
         return hs, dec_init_state
 
-    def decode_once(self, y, hs, dec_init_state, mask_x, x=None, max_ext_len=None, acc_att=None):
+    def decode_once(self, y, hs, dec_init_state, mask_x, x=None, max_ext_len=None, acc_att=None, mask_y=None, x_ext=None):
         batch_size = hs.size(1)
         if T.sum(y) < 0:
             y_emb = Variable(T.zeros((1, batch_size, self.dim_y))).to(self.device)
         else:
             y_emb = self.w_rawdata_emb(y)
-        mask_y = Variable(T.ones((1, batch_size, 1))).to(self.device)
+        if mask_y is None:
+            mask_y = Variable(T.ones((1, batch_size, 1))).to(self.device)
 
         if self.copy and self.coverage:
-            hcs, dec_status, atted_context, att_dist, xids, C = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, x, acc_att)
+            hcs, dec_status, atted_context, att_dist, xids, C = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
         elif self.copy:
-            hcs, dec_status, atted_context, att_dist, xids = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, xid=x)
+            hcs, dec_status, atted_context, att_dist, xids = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, xid=x_ext)
         elif self.coverage:
             hcs, dec_status, atted_context, att_dist, C = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, init_coverage=acc_att)
         else:
@@ -130,7 +131,7 @@ class Model(nn.Module):
 
         if random.random() > self.teacher_forcing_p:
             if self.copy and self.coverage:
-                hcs, dec_status, atted_context, att_dist, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, x_ext, acc_att)
+                hcs, dec_status, atted_context, att_dist, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
             elif self.copy:
                 hcs, dec_status, atted_context, att_dist, xids = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext)
             elif self.coverage:
@@ -148,28 +149,30 @@ class Model(nn.Module):
             dec_result = [[] for i in xrange(testing_batch_size)]
             existence = [True] * testing_batch_size
             num_left = testing_batch_size
-
-            y_shifted = torch.LongTensor(-np.ones((1, testing_batch_size), dtype="int64")).to(self.device)
+            # NOTE: why is it with -1 initialized ??
+            y_shifted = torch.LongTensor(np.zeros((1, testing_batch_size), dtype="int64")).to(self.device)
             dec_state = h0
 
             if self.copy:
                 max_steps = y_ext.size(0)
             else:
                 max_steps = y.size(0)
+
             for step in xrange(max_steps):
                 if num_left == 0:
                     break
                 if self.copy and self.coverage:
-                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, mask_y=mask_y, x_ext=x_ext)
                 elif self.copy:
-                    y_pred, dec_state, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len)
+                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, mask_y=mask_y, x_ext=x_ext)
                 elif self.coverage:
-                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att, mask_y=mask_y)
                 else:
-                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x)
-                y_preds.append(y_pred.squeeze())
+                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x, mask_y=mask_y)
+
                 dict_size = y_pred.shape[-1]
                 y_pred = y_pred.view(testing_batch_size, dict_size)
+                y_preds.append(y_pred)
                 next_y_ = torch.argmax(y_pred, 1)
                 y_shifted = []
                 for e in range(testing_batch_size):
