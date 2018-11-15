@@ -34,45 +34,48 @@ class DeepmindTesting(object):
     REMOVES_PUNCTION = False
 
 class DeepmindConfigs():
+    def __init__(self, colab):
+        if colab:
+            self.cc = CommonConfigs("drive/My Drive/IR2/deepmind/")
+        else:
+            self.cc = CommonConfigs("../deepmind/")
 
-    cc = CommonConfigs("../deepmind/")
+        self.CELL = "lstm" # gru or lstm
+        self.CUDA = True
+        self.COPY = True
+        self.COVERAGE = True
+        self.BI_RNN = True
+        self.BEAM_SEARCH = True
+        self.BEAM_SIZE = 4
+        self.AVG_NLL = True
+        self.NORM_CLIP = 2
+        if not self.AVG_NLL:
+            self.NORM_CLIP = 5
+        self.LR = 0.15
 
-    CELL = "lstm" # gru or lstm
-    CUDA = True
-    COPY = True
-    COVERAGE = True
-    BI_RNN = True
-    BEAM_SEARCH = True
-    BEAM_SIZE = 4
-    AVG_NLL = True
-    NORM_CLIP = 2
-    if not AVG_NLL:
-        NORM_CLIP = 5
-    LR = 0.15
+        self.DIM_X = 128
+        self.DIM_Y = self.DIM_X
 
-    DIM_X = 128
-    DIM_Y = DIM_X
+        self.TF_P = 0.2
 
-    TF_P = 0.2
+        self.MIN_LEN_X = 10
+        self.MIN_LEN_Y = 10
+        self.MAX_LEN_X = 400
+        self.MAX_LEN_Y = 100
+        self.MIN_NUM_X = 1
+        self.MAX_NUM_X = 1
+        self.MAX_NUM_Y = None
 
-    MIN_LEN_X = 10
-    MIN_LEN_Y = 10
-    MAX_LEN_X = 400
-    MAX_LEN_Y = 100
-    MIN_NUM_X = 1
-    MAX_NUM_X = 1
-    MAX_NUM_Y = None
+        self.NUM_Y = 1
+        self.HIDDEN_SIZE = 256
 
-    NUM_Y = 1
-    HIDDEN_SIZE = 256
+        self.UNI_LOW_FREQ_THRESHOLD = 10
 
-    UNI_LOW_FREQ_THRESHOLD = 10
+        self.PG_DICT_SIZE = 50000 # dict for acl17 paper: pointer-generator
 
-    PG_DICT_SIZE = 50000 # dict for acl17 paper: pointer-generator
-
-    W_UNK = "<unk>"
-    W_BOS = "<bos>"
-    W_EOS = "<eos>"
-    W_PAD = "<pad>"
-    W_LS = "<s>"
-    W_RS = "</s>"
+        self.W_UNK = "<unk>"
+        self.W_BOS = "<bos>"
+        self.W_EOS = "<eos>"
+        self.W_PAD = "<pad>"
+        self.W_LS = "<s>"
+        self.W_RS = "</s>"

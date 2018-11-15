@@ -21,7 +21,14 @@ from model import *
 from utils_pg import *
 from configs import *
 
-cfg = DeepmindConfigs()
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
+opt = parser.parse_args()
+
+
+cfg = DeepmindConfigs(opt.colab)
 TRAINING_DATASET_CLS = DeepmindTraining
 TESTING_DATASET_CLS = DeepmindTesting
 
