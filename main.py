@@ -49,7 +49,7 @@ def print_basic_info(modules, consts, options):
         print k + ":", consts[k]
 
 def init_modules():
-    
+
     init_seeds()
 
     options = {}
@@ -60,7 +60,7 @@ def init_modules():
 
     options["cuda"] = cfg.CUDA and torch.cuda.is_available()
     options["device"] = torch.device("cuda" if  options["cuda"] else "cpu")
-    
+
     #in config.py
     options["cell"] = cfg.CELL
     options["copy"] = cfg.COPY
@@ -69,11 +69,11 @@ def init_modules():
     options["avg_nll"] = cfg.AVG_NLL
 
     options["beam_decoding"] = cfg.BEAM_SEARCH # False for greedy decoding
-    
+
     assert TRAINING_DATASET_CLS.IS_UNICODE == TESTING_DATASET_CLS.IS_UNICODE
     options["is_unicode"] = TRAINING_DATASET_CLS.IS_UNICODE # True Chinese dataet
     options["has_y"] = TRAINING_DATASET_CLS.HAS_Y
-    
+
     options["has_learnable_w2v"] = True
     options["omit_eos"] = False # omit <eos> and continuously decode until length of sentence reaches MAX_LEN_PREDICT (for DUC testing data)
     options["prediction_bytes_limitation"] = False if TESTING_DATASET_CLS.MAX_BYTE_PREDICT == None else True
@@ -81,9 +81,10 @@ def init_modules():
     assert options["is_unicode"] == False
 
     consts = {}
-    
+
     consts["idx_gpu"] = cudaid
 
+    consts["teacher_forcing_p"] = cfg.TF_P
     consts["norm_clip"] = cfg.NORM_CLIP
     consts["dim_x"] = cfg.DIM_X
     consts["dim_y"] = cfg.DIM_Y
@@ -97,7 +98,7 @@ def init_modules():
     if options["is_debugging"]:
         consts["testing_batch_size"] = 1 if options["beam_decoding"] else 2
     else:
-        #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE 
+        #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE
         consts["testing_batch_size"] = TESTING_DATASET_CLS.BATCH_SIZE
 
     consts["min_len_predict"] = TESTING_DATASET_CLS.MIN_LEN_PREDICT
@@ -108,7 +109,7 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 150 if options["is_debugging"] else 30 
+    consts["max_epoch"] = 150 if options["is_debugging"] else 30
     consts["print_time"] = 5
     consts["save_epoch"] = 1
 
@@ -116,8 +117,8 @@ def init_modules():
     assert consts["beam_size"] >= 1
 
     modules = {}
-    
-    [_, dic, hfw, w2i, i2w, w2w] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "dic.pkl", "r")) 
+
+    [_, dic, hfw, w2i, i2w, w2w] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "dic.pkl", "r"))
     consts["dict_size"] = len(dic)
     modules["dic"] = dic
     modules["w2i"] = w2i
@@ -146,7 +147,7 @@ def greedy_decode(flist, batch, model, modules, consts, options):
         dec_state = (dec_state, dec_state)
     if options["coverage"]:
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
-     
+
     for step in xrange(consts["max_len_predict"]):
         if num_left == 0:
             break
@@ -190,14 +191,14 @@ def greedy_decode(flist, batch, model, modules, consts, options):
                 num_left -= 1
             else:
                 dec_result[idx_doc].append(str(idx_max))
-    
-    # for task with bytes-length limitation 
+
+    # for task with bytes-length limitation
     if options["prediction_bytes_limitation"]:
         for i in xrange(len(dec_result)):
             sample = dec_result[i]
             b = 0
             for j in xrange(len(sample)):
-                e = int(sample[j]) 
+                e = int(sample[j])
                 if e in modules["i2w"]:
                     word = modules["i2w"][e]
                 else:
@@ -205,7 +206,7 @@ def greedy_decode(flist, batch, model, modules, consts, options):
                 if j == 0:
                     b += len(word)
                 else:
-                    b += len(word) + 1 
+                    b += len(word) + 1
                 if b > consts["max_byte_predict"]:
                     sorted_samples[i] = sorted_samples[i][0 : j]
                     break
@@ -242,7 +243,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
         x, word_emb, dec_state, x_mask, y, len_y, ref_sents, max_ext_len, oovs = batch
     else:
         x, word_emb, dec_state, x_mask, y, len_y, ref_sents = batch
-    
+
     next_y = torch.LongTensor(-np.ones((1, num_live), dtype="int64")).to(options["device"])
     x = x.unsqueeze(1)
     word_emb = word_emb.unsqueeze(1)
@@ -250,10 +251,10 @@ def beam_decode(fname, batch, model, modules, consts, options):
     dec_state = dec_state.unsqueeze(0)
     if options["cell"] == "lstm":
         dec_state = (dec_state, dec_state)
-    
+
     if options["coverage"]:
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
-        last_acc_att = [] 
+        last_acc_att = []
 
     for step in xrange(consts["max_len_predict"]):
         tile_word_emb = word_emb.repeat(1, num_live, 1)
@@ -278,7 +279,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             dec_state = (dec_state[0].view(num_live, dec_state[0].shape[-1]), dec_state[1].view(num_live, dec_state[1].shape[-1]))
         else:
             dec_state = dec_state.view(num_live, dec_state.shape[-1])
-  
+
         cand_scores = last_scores + torch.log(y_pred) # larger is better
         cand_scores = cand_scores.flatten()
         idx_top_joint_scores = torch.topk(cand_scores, beam_size - num_dead)[1]
@@ -291,10 +292,10 @@ def beam_decode(fname, batch, model, modules, consts, options):
         traces_now = []
         scores_now = np.zeros((beam_size - num_dead))
         states_now = []
-        if options["coverage"]: 
+        if options["coverage"]:
             acc_att_now = []
             last_acc_att = []
-        
+
         for i, [j, k] in enumerate(zip(idx_last_traces, idx_word_now)):
             traces_now.append(last_traces[j] + [k])
             scores_now[i] = copy.copy(top_joint_scores[i])
@@ -346,8 +347,8 @@ def beam_decode(fname, batch, model, modules, consts, options):
         else:
             dec_state = torch.stack(last_states).view((num_live, dec_state.shape[-1]))
         if options["coverage"]:
-            acc_att = torch.stack(last_acc_att).view((num_live, acc_att.shape[-1])) 
-            
+            acc_att = torch.stack(last_acc_att).view((num_live, acc_att.shape[-1]))
+
         assert num_live + num_dead == beam_size
 
     if num_live > 0:
@@ -355,7 +356,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             samples.append([str(e.item()) for e in last_traces[i]])
             sample_scores[num_dead] = last_scores[i]
             num_dead += 1
-    
+
     #weight by length
     for i in xrange(len(sample_scores)):
         sent_len = float(len(samples[i]))
@@ -384,13 +385,13 @@ def beam_decode(fname, batch, model, modules, consts, options):
         sorted_samples = sorted_samples[0]
         num_samples = 1
 
-    # for task with bytes-length limitation 
+    # for task with bytes-length limitation
     if options["prediction_bytes_limitation"]:
         for i in xrange(len(sorted_samples)):
             sample = sorted_samples[i]
             b = 0
             for j in xrange(len(sample)):
-                e = int(sample[j]) 
+                e = int(sample[j])
                 if e in modules["i2w"]:
                     word = modules["i2w"][e]
                 else:
@@ -398,7 +399,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
                 if j == 0:
                     b += len(word)
                 else:
-                    b += len(word) + 1 
+                    b += len(word) + 1
                 if b > consts["max_byte_predict"]:
                     sorted_samples[i] = sorted_samples[i][0 : j]
                     break
@@ -411,14 +412,14 @@ def beam_decode(fname, batch, model, modules, consts, options):
             dec_words.append(modules["i2w"][e])
         else:
             dec_words.append(oovs[e - len(modules["i2w"])])
-    
+
     write_for_rouge(fname, ref_sents, dec_words, cfg)
 
     # beam search history for checking
     if not options["copy"]:
         oovs = None
     write_summ("".join((cfg.cc.BEAM_SUMM_PATH, fname)), sorted_samples, num_samples, options, modules["i2w"], oovs, sorted_scores)
-    write_summ("".join((cfg.cc.BEAM_GT_PATH, fname)), y_true, 1, options, modules["i2w"], oovs) 
+    write_summ("".join((cfg.cc.BEAM_GT_PATH, fname)), y_true, 1, options, modules["i2w"], oovs)
 
 
 def predict(model, modules, consts, options):
@@ -435,13 +436,13 @@ def predict(model, modules, consts, options):
 
     print "loading test set..."
     if options["model_selection"]:
-        xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r")) 
+        xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
     else:
-        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r")) 
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
 
     print "num_files = ", num_files, ", num_batches = ", num_batches
-    
+
     running_start = time.time()
     partial_num = 0
     total_num = 0
@@ -450,13 +451,13 @@ def predict(model, modules, consts, options):
         test_idx = batch_list[idx_batch]
         batch_raw = [xy_list[xy_idx] for xy_idx in test_idx]
         batch = datar.get_data(batch_raw, modules, consts, options)
-        
+
         assert len(test_idx) == batch.x.shape[1] # local_batch_size
 
         x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
                                                              batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
-                    
+
         word_emb, dec_state = model.encode(torch.LongTensor(x).to(options["device"]),\
                                            torch.LongTensor(len_x).to(options["device"]),\
                                            torch.FloatTensor(x_mask).to(options["device"]))
@@ -508,20 +509,20 @@ def run(existing_model_name = None):
     if training_model:
         print "loading train set..."
         if options["is_debugging"]:
-            xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r")) 
+            xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
         else:
-            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r")) 
+            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r"))
         batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
         print "num_files = ", num_files, ", num_batches = ", num_batches
 
     running_start = time.time()
     if True: #TODO: refactor
-        print "compiling model ..." 
+        print "compiling model ..."
         model = Model(modules, consts, options)
         if options["cuda"]:
             model.cuda()
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
-        
+
         model_name = "".join(["cnndm.s2s.", options["cell"]])
         existing_epoch = 0
         if need_load_model:
@@ -554,11 +555,11 @@ def run(existing_model_name = None):
                         continue
                     local_batch_size = len(batch_raw)
                     batch = datar.get_data(batch_raw, modules, consts, options)
-                  
+
                     x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
                                                              batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
-                    
+
                     model.zero_grad()
                     y_pred, cost, cost_c = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
@@ -571,18 +572,18 @@ def run(existing_model_name = None):
                         loss = cost + cost_c
                         cost_c = cost_c.item()
                         error_c += cost_c
-                    
+
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
-                    
+
                     cost = cost.item()
                     total_error += cost
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
                     if partial_num_files / print_size == 1 and idx_batch < num_batches:
-                        print idx_batch + 1, "/" , num_batches, "batches have been processed,", 
-                        print "average cost until now:", "cost =", total_error / used_batch, ",", 
+                        print idx_batch + 1, "/" , num_batches, "batches have been processed,",
+                        print "average cost until now:", "cost =", total_error / used_batch, ",",
                         print "cost_c =", error_c / used_batch, ",",
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
@@ -591,12 +592,12 @@ def run(existing_model_name = None):
                             save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
                             print "finished"
                         num_partial += 1
-                print "in this epoch, total average cost =", total_error / used_batch, ",", 
+                print "in this epoch, total average cost =", total_error / used_batch, ",",
                 print "cost_c =", error_c / used_batch, ",",
                 print "time:", time.time() - epoch_start
 
                 print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
-                
+
                 if last_total_error > total_error or options["is_debugging"]:
                     last_total_error = total_error
                     if not options["is_debugging"]:
