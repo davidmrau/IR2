@@ -25,7 +25,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
-parser.add_argument('--batch_size', help='Batch size for training', default=8)
+parser.add_argument('--batch_size', help='Batch size for training', default=8, type=int)
 opt = parser.parse_args()
 
 
