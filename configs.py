@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 #pylint: skip-file
-import os 
+import os
 
 class CommonConfigs(object):
     def __init__(self, d_type):
-        self.ROOT_PATH = os.getcwd() + "/"
+        self.ROOT_PATH = ""
         self.TRAINING_DATA_PATH = self.ROOT_PATH + d_type + "/train_set/"
         self.VALIDATE_DATA_PATH = self.ROOT_PATH + d_type + "/validate_set/"
         self.TESTING_DATA_PATH = self.ROOT_PATH + d_type + "/test_set/"
@@ -34,9 +34,9 @@ class DeepmindTesting(object):
     REMOVES_PUNCTION = False
 
 class DeepmindConfigs():
-    
-    cc = CommonConfigs("deepmind")
-   
+
+    cc = CommonConfigs("drive/My Drive/IR2/deepmind/")
+
     CELL = "lstm" # gru or lstm
     CUDA = True
     COPY = True
@@ -48,7 +48,7 @@ class DeepmindConfigs():
     NORM_CLIP = 2
     if not AVG_NLL:
         NORM_CLIP = 5
-    LR = 0.15 
+    LR = 0.15
 
     DIM_X = 128
     DIM_Y = DIM_X
@@ -67,7 +67,7 @@ class DeepmindConfigs():
     UNI_LOW_FREQ_THRESHOLD = 10
 
     PG_DICT_SIZE = 50000 # dict for acl17 paper: pointer-generator
-    
+
     W_UNK = "<unk>"
     W_BOS = "<bos>"
     W_EOS = "<eos>"
