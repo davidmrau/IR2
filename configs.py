@@ -18,10 +18,11 @@ class CommonConfigs(object):
 
 
 class DeepmindTraining(object):
-    IS_UNICODE = False
-    REMOVES_PUNCTION = False
-    HAS_Y = True
-    BATCH_SIZE = 2
+    def __init__(self, batch_size):
+        self.IS_UNICODE = False
+        self.REMOVES_PUNCTION = False
+        self.HAS_Y = True
+        self.BATCH_SIZE = batch_size
 
 class DeepmindTesting(object):
     IS_UNICODE = False

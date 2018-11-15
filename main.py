@@ -25,11 +25,12 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
+parser.add_argument('--batch_size', help='Batch size for training', default=8)
 opt = parser.parse_args()
 
 
 cfg = DeepmindConfigs(opt.colab)
-TRAINING_DATASET_CLS = DeepmindTraining
+TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
 TESTING_DATASET_CLS = DeepmindTesting
 
 def print_basic_info(modules, consts, options):
