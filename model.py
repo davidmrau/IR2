@@ -27,6 +27,12 @@ class Model(nn.Module):
         self.coverage = options["coverage"]
         self.avg_nll = options["avg_nll"]
 
+        self.eos_emb = modules["eos_emb"]
+        self.lfw_emb = modules["lfw_emb"]
+        self.max_len_predict = consts["max_len_predict"]
+        self.min_len_predict = consts["min_len_predict"]
+        self.i2w = modules["i2w"]
+
         self.dim_x = consts["dim_x"]
         self.dim_y = consts["dim_y"]
         self.len_x = consts["len_x"]
@@ -104,73 +110,9 @@ class Model(nn.Module):
             y_pred = self.word_prob(dec_status, atted_context, y_emb)
 
         if self.coverage:
-            return y_pred, hcs, C
+            return y_pred, hcs, C, att_dist
         else:
             return y_pred, hcs
-def greedy_decode(flist, batch, model, modules, consts, options, mask_y):
-    testing_batch_size = len(flist)
-
-    dec_result = [[] for i in xrange(testing_batch_size)]
-    existence = [True] * testing_batch_size
-    num_left = testing_batch_size
-
-    if self.copy
-        x, word_emb, dec_state, x_mask, y, len_y, ref_sents, max_ext_len, oovs = batch
-    else:
-        x, word_emb, dec_state, x_mask, y, len_y, ref_sents = batch
-
-    next_y = torch.LongTensor(-np.ones((1, testing_batch_size), dtype="int64")).to(options["device"])
-
-    if self.cell == "lstm":
-        dec_state = (dec_state, dec_state)
-    if self.coverage:
-        acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
-
-    for step in xrange(consts["max_len_predict"]):
-        if num_left == 0:
-            break
-        if self.copy and self.coverage:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len, acc_att)
-        elif self.copy:
-            y_pred, dec_state = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len)
-        elif self.coverage:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, word_emb, dec_state, x_mask, acc_att=acc_att)
-        else:
-            y_pred, dec_state = model.decode_once(next_y, word_emb, dec_state, x_mask)
-
-        dict_size = y_pred.shape[-1]
-        y_pred = y_pred.view(testing_batch_size, dict_size)
-        next_y_ = torch.argmax(y_pred, 1)
-        next_y = []
-        for e in range(testing_batch_size):
-            eid = next_y_[e].item()
-            if eid in modules["i2w"]:
-                next_y.append(eid)
-            else:
-                next_y.append(modules["lfw_emb"]) # unk for copy mechanism
-        next_y = np.array(next_y).reshape((1, testing_batch_size))
-        next_y = torch.LongTensor(next_y).to(options["device"])
-
-        if self.coverage:
-            acc_att = acc_att.view(testing_batch_size, acc_att.shape[-1])
-
-        if self.cell == "lstm":
-            dec_state = (dec_state[0].view(testing_batch_size, dec_state[0].shape[-1]), dec_state[1].view(testing_batch_size, dec_state[1].shape[-1]))
-        else:
-            dec_state = dec_state.view(testing_batch_size, dec_state.shape[-1])
-
-        for idx_doc in xrange(testing_batch_size):
-            if existence[idx_doc] == False:
-                continue
-
-            idx_max = next_y[0, idx_doc].item()
-            if idx_max == modules["eos_emb"] and len(dec_result[idx_doc]) >= consts["min_len_predict"]:
-                existence[idx_doc] = False
-                num_left -= 1
-            else:
-                dec_result[idx_doc].append(str(idx_max))
-
-        cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
 
 
     def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len):
@@ -188,11 +130,11 @@ def greedy_decode(flist, batch, model, modules, consts, options, mask_y):
 
         if random.random() > self.teacher_forcing_p:
             if self.copy and self.coverage:
-                hcs, dec_status, atted_context, att_dist, xids, C = self.decoder(y_shifted, hs, h0, mask_x, mask_y, x_ext, acc_att)
+                hcs, dec_status, atted_context, att_dist, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, x_ext, acc_att)
             elif self.copy:
                 hcs, dec_status, atted_context, att_dist, xids = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext)
             elif self.coverage:
-                hcs, dec_status, atted_context, att_dist, C = self.decoder(y_shifted, hs, h0, mask_x, mask_y, init_coverage=acc_att)
+                hcs, dec_status, atted_context, att_dist, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, init_coverage=acc_att)
             else:
                 hcs, dec_status, atted_context = self.decoder(y_shifted, hs, h0, mask_x, mask_y)
 
@@ -201,40 +143,43 @@ def greedy_decode(flist, batch, model, modules, consts, options, mask_y):
             else:
                 y_pred = self.word_prob(dec_status, atted_context, y_shifted)
         else:
-            testing_batch_size = x.size(0)
+            testing_batch_size = x.size(1)
             y_preds = []
             dec_result = [[] for i in xrange(testing_batch_size)]
             existence = [True] * testing_batch_size
             num_left = testing_batch_size
 
-            y_shifted = torch.LongTensor(-np.ones((1, testing_batch_size), dtype="int64")).to(options["device"])
+            y_shifted = torch.LongTensor(-np.ones((1, testing_batch_size), dtype="int64")).to(self.device)
+            dec_state = h0
 
-            for step in xrange(consts["max_len_predict"]):
+            if self.copy:
+                max_steps = y_ext.size(0)
+            else:
+                max_steps = y.size(0)
+            for step in xrange(max_steps):
                 if num_left == 0:
                     break
                 if self.copy and self.coverage:
-                    y_pred, dec_state, acc_att = model.decode_once(y_shifted, word_emb, dec_state, x_mask, x, max_ext_len, acc_att)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att)
                 elif self.copy:
-                    y_pred, dec_state = model.decode_once(y_shifted, word_emb, dec_state, x_mask, x, max_ext_len)
+                    y_pred, dec_state, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len)
                 elif self.coverage:
-                    y_pred, dec_state, acc_att = model.decode_once(y_shifted, word_emb, dec_state, x_mask, acc_att=acc_att)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
                 else:
-                    y_pred, dec_state = model.decode_once(y_shifted, word_emb, dec_state, x_mask)
-
-                y_preds.append(y_pred)
-
+                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x)
+                y_preds.append(y_pred.squeeze())
                 dict_size = y_pred.shape[-1]
                 y_pred = y_pred.view(testing_batch_size, dict_size)
                 next_y_ = torch.argmax(y_pred, 1)
                 y_shifted = []
                 for e in range(testing_batch_size):
                     eid = next_y_[e].item()
-                    if eid in modules["i2w"]:
+                    if eid in self.i2w:
                         y_shifted.append(eid)
                     else:
-                        y_shifted.append(modules["lfw_emb"]) # unk for copy mechanism
+                        y_shifted.append(self.lfw_emb) # unk for copy mechanism
                 y_shifted = np.array(y_shifted).reshape((1, testing_batch_size))
-                y_shifted = torch.LongTensor(y_shifted).to(options["device"])
+                y_shifted = torch.LongTensor(y_shifted).to(self.device)
 
                 if self.coverage:
                     acc_att = acc_att.view(testing_batch_size, acc_att.shape[-1])
@@ -249,20 +194,21 @@ def greedy_decode(flist, batch, model, modules, consts, options, mask_y):
                         continue
 
                     idx_max = y_shifted[0, idx_doc].item()
-                    if idx_max == modules["eos_emb"] and len(dec_result[idx_doc]) >= consts["min_len_predict"]:
+                    if idx_max == self.eos_emb and len(dec_result[idx_doc]) >= self.min_len_predict:
                         existence[idx_doc] = False
                         num_left -= 1
                     else:
                         dec_result[idx_doc].append(str(idx_max))
 
                 y_pred = torch.stack(y_preds)
+
         if self.copy:
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
         else:
             cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
 
         if self.coverage:
-            cost_c = T.mean(T.sum(T.min(att_dist, C), 2))
+            cost_c = T.mean(T.sum(T.min(att_dist, acc_att), 2))
             return y_pred, cost, cost_c
         else:
             return y_pred, cost, None

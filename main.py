@@ -60,7 +60,7 @@ def init_modules():
 
     options["cuda"] = cfg.CUDA and torch.cuda.is_available()
     options["device"] = torch.device("cuda" if  options["cuda"] else "cpu")
-
+    print('Running', options["device"])
     #in config.py
     options["cell"] = cfg.CELL
     options["copy"] = cfg.COPY

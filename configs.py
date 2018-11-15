@@ -21,7 +21,7 @@ class DeepmindTraining(object):
     IS_UNICODE = False
     REMOVES_PUNCTION = False
     HAS_Y = True
-    BATCH_SIZE = 32
+    BATCH_SIZE = 2
 
 class DeepmindTesting(object):
     IS_UNICODE = False
@@ -35,7 +35,7 @@ class DeepmindTesting(object):
 
 class DeepmindConfigs():
 
-    cc = CommonConfigs("drive/My Drive/IR2/deepmind/")
+    cc = CommonConfigs("../deepmind/")
 
     CELL = "lstm" # gru or lstm
     CUDA = True
@@ -52,6 +52,8 @@ class DeepmindConfigs():
 
     DIM_X = 128
     DIM_Y = DIM_X
+
+    TF_P = 0.2
 
     MIN_LEN_X = 10
     MIN_LEN_Y = 10
