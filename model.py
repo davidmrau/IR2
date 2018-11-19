@@ -28,7 +28,7 @@ class Model(nn.Module):
         self.avg_nll = options["avg_nll"]
 
         self.use_p_point_loss = options["use_p_point_loss"]
-        self.user_w_prior_point_loss = options["use_w_prior_point_loss"]
+        self.use_w_prior_point_loss = options["use_w_prior_point_loss"]
 
         self.x_ent = nn.modules.CrossEntropyLoss()
 
@@ -113,14 +113,14 @@ class Model(nn.Module):
             hcs, dec_status, atted_context = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y)
 
         if self.copy:
-            y_pred, p_gen = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
+            y_pred, p_point = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
         else:
             y_pred = self.word_prob(dec_status, atted_context, y_emb, dropout_p_point=self.dropout_p_point)
 
         if self.coverage:
-            return y_pred, hcs, C, att_dist, p_gen
+            return y_pred, hcs, C, att_dist, p_point
         else:
-            return y_pred, hcs, p_gen
+            return y_pred, hcs, p_point
 
 
     def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len, tf=None):
@@ -148,7 +148,7 @@ class Model(nn.Module):
                 hcs, dec_status, atted_context = self.decoder(y_shifted, hs, h0, mask_x, mask_y)
 
             if self.copy:
-                y_pred, p_poins = self.word_prob(dec_status, atted_context, y_shifted, att_dists, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
+                y_pred, p_points = self.word_prob(dec_status, atted_context, y_shifted, att_dists, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
             else:
                 y_pred = self.word_prob(dec_status, atted_context, y_shifted, dropout_p_point=self.dropout_p_point)
         else:
@@ -169,23 +169,23 @@ class Model(nn.Module):
                 if num_left == 0:
                     break
                 if self.copy and self.coverage:
-                    y_pred, dec_state, acc_att, att_dist, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, x_ext=x_ext)
+                    y_pred, dec_state, acc_att, att_dist, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, x_ext=x_ext)
                     # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_gen])
+                    p_points = torch.cat([p_points, p_point])
                     # accumulate attention distributions for every step in the batches
                     att_dists = torch.cat([att_dists, att_dist])
                 elif self.copy:
-                    y_pred, dec_state, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, x_ext=x_ext)
+                    y_pred, dec_state, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, x_ext=x_ext)
                     # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_gen])
+                    p_points = torch.cat([p_points, p_point])
                 elif self.coverage:
                     y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
-                    # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_gen])
                     # accumulate attention distributions for every step in the batches
                     att_dists = torch.cat([att_dists, att_dist])
                 else:
-                    y_pred, dec_state, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x)
+                    y_pred, dec_state, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x)
+                    # accumulate p_point for every step in the batches
+                    p_points = torch.cat([p_points, p_point])
 
 
                 dict_size = y_pred.shape[-1]
@@ -231,7 +231,8 @@ class Model(nn.Module):
             if self.use_p_point_loss:
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
                 cost += cost_p_point
-            elif self.user_w_prior_point_loss:
+            elif self.use_w_prior_point_loss:
+                print(p_points.shape)
                 p_points = p_points.transpose(0,1)
                 att_dists = att_dists.transpose(0,1)
                 y_pred_idx = y_pred.transpose(0,1).argmax(2)
