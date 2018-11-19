@@ -86,7 +86,7 @@ class LSTMAttentionDecoder(nn.Module):
             else:
                 word_atten = [_get_word_atten(pctx, s, x_mask, i) for i in range(self.n_heads)]
             atted_ctx_heads = [T.sum(word_atten[i] * context, 0) for i in range(self.n_heads)]
-            atted_ctx_concat = T.cat(atted_ctx, -1)
+            atted_ctx_concat = T.cat(atted_ctx_heads, -1)
             atted_ctx = self.W_att_concat(atted_ctx_concat)
 
 
