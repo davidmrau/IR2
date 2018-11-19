@@ -93,8 +93,7 @@ class Model(nn.Module):
             y_emb = Variable(T.zeros((1, batch_size, self.dim_y))).to(self.device)
         else:
             y_emb = self.w_rawdata_emb(y)
-        if mask_y is None:
-            mask_y = Variable(T.ones((1, batch_size, 1))).to(self.device)
+        mask_y = Variable(T.ones((1, batch_size, 1))).to(self.device)
 
         if self.copy and self.coverage:
             hcs, dec_status, atted_context, att_dist, xids, C = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
@@ -116,7 +115,7 @@ class Model(nn.Module):
             return y_pred, hcs
 
 
-    def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len):
+    def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len, tf=None):
 
         hs, dec_init_state = self.encode(x, len_x, mask_x)
 
@@ -129,7 +128,7 @@ class Model(nn.Module):
         if self.coverage:
             acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(self.device) # B * len(x)
 
-        if random.random() > self.teacher_forcing_p:
+        if tf:
             if self.copy and self.coverage:
                 hcs, dec_status, atted_context, att_dist, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
             elif self.copy:
@@ -162,13 +161,13 @@ class Model(nn.Module):
                 if num_left == 0:
                     break
                 if self.copy and self.coverage:
-                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, mask_y=mask_y, x_ext=x_ext)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, x_ext=x_ext)
                 elif self.copy:
-                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, mask_y=mask_y, x_ext=x_ext)
+                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, x_ext=x_ext)
                 elif self.coverage:
-                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att, mask_y=mask_y)
+                    y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
                 else:
-                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x, mask_y=mask_y)
+                    y_pred, dec_state = self.decode_once(y_shifted, hs, dec_state, mask_x)
 
                 dict_size = y_pred.shape[-1]
                 y_pred = y_pred.view(testing_batch_size, dict_size)
@@ -209,7 +208,6 @@ class Model(nn.Module):
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
         else:
             cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
-
         if self.coverage:
             cost_c = T.mean(T.sum(T.min(att_dist, acc_att), 2))
             return y_pred, cost, cost_c

@@ -25,7 +25,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
+parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
 parser.add_argument('--batch_size', help='Batch size for training', default=8, type=int)
+parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
 opt = parser.parse_args()
 
 
@@ -92,7 +94,6 @@ def init_modules():
 
     consts["idx_gpu"] = cudaid
 
-    consts["teacher_forcing_p"] = cfg.TF_P
     consts["norm_clip"] = cfg.NORM_CLIP
     consts["dim_x"] = cfg.DIM_X
     consts["dim_y"] = cfg.DIM_Y
@@ -136,6 +137,14 @@ def init_modules():
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
 
     return modules, consts, options
+def teacher_forcing_ratio(steps):
+    offset = 350000
+    if steps < offset:
+        return False
+    else:
+        prob_tf =  100/(100 + np.exp(steps-offset/step_size))
+        return random.random() < prob_tf
+
 
 def greedy_decode(flist, batch, model, modules, consts, options):
     testing_batch_size = len(flist)
@@ -542,7 +551,7 @@ def run(existing_model_name = None):
         if training_model:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
-
+            steps = 0
             last_total_error = float("inf")
             print "max epoch:", consts["max_epoch"]
             for epoch in xrange(0, consts["max_epoch"]):
@@ -561,6 +570,7 @@ def run(existing_model_name = None):
                     batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
                     if len(batch_raw) != consts["batch_size"]:
                         continue
+                    steps += 1
                     local_batch_size = len(batch_raw)
                     batch = datar.get_data(batch_raw, modules, consts, options)
 
@@ -569,11 +579,16 @@ def run(existing_model_name = None):
                                                              batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
 
                     model.zero_grad()
+
+                    if opt.tf_schedule:
+                        tf = teacher_forcing_ratio(steps)
+                    else:
+                        tf = True
                     y_pred, cost, cost_c = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
-                                   batch.max_ext_len)
+                                   batch.max_ext_len, tf)
                     if cost_c is None:
                         loss = cost
                     else:

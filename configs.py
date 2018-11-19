@@ -57,8 +57,6 @@ class DeepmindConfigs():
         self.DIM_X = 128
         self.DIM_Y = self.DIM_X
 
-        self.TF_P = 0.2
-
         self.MIN_LEN_X = 10
         self.MIN_LEN_Y = 10
         self.MAX_LEN_X = 400
