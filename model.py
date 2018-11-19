@@ -207,7 +207,7 @@ class Model(nn.Module):
                         dec_result[idx_doc].append(str(idx_max))
 
                 y_pred = torch.stack(y_preds)
-        cost_p_gen = None
+        cost_p_point = None
         if self.copy:
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
             if self.use_p_point_loss:

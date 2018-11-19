@@ -584,7 +584,6 @@ def run(existing_model_name = None):
                     batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
                     if len(batch_raw) != consts["batch_size"]:
                         continue
-                    steps += 1
                     local_batch_size = len(batch_raw)
                     batch = datar.get_data(batch_raw, modules, consts, options)
 
@@ -632,6 +631,7 @@ def run(existing_model_name = None):
                             save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
                             print "finished"
                         num_partial += 1
+                    steps += 1
                 print "in this epoch, total average cost =", total_error / used_batch, ",",
                 print "cost_c =", error_c / used_batch, ",",
                 print "time:", time.time() - epoch_start
