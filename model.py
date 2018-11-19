@@ -37,6 +37,7 @@ class Model(nn.Module):
         self.i2w = modules["i2w"]
 
         self.p_point_scalar = consts["p_point_scalar"]
+        self.dropout_p_point = consts["dropout_p_point"]
 
         self.dim_x = consts["dim_x"]
         self.dim_y = consts["dim_y"]
@@ -109,9 +110,9 @@ class Model(nn.Module):
             hcs, dec_status, atted_context = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y)
 
         if self.copy:
-            y_pred, p_gen = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len)
+            y_pred, p_gen = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
         else:
-            y_pred = self.word_prob(dec_status, atted_context, y_emb)
+            y_pred = self.word_prob(dec_status, atted_context, y_emb, dropout_p_point=self.dropout_p_point)
 
         if self.coverage:
             return y_pred, hcs, C, att_dist, p_gen
@@ -143,9 +144,9 @@ class Model(nn.Module):
                 hcs, dec_status, atted_context = self.decoder(y_shifted, hs, h0, mask_x, mask_y)
 
             if self.copy:
-                y_pred, p_poins = self.word_prob(dec_status, atted_context, y_shifted, att_dist, xids, max_ext_len)
+                y_pred, p_poins = self.word_prob(dec_status, atted_context, y_shifted, att_dist, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
             else:
-                y_pred = self.word_prob(dec_status, atted_context, y_shifted)
+                y_pred = self.word_prob(dec_status, atted_context, y_shifted, dropout_p_point=self.dropout_p_point)
         else:
             p_poins = torch.Tensor([])
             testing_batch_size = x.size(1)

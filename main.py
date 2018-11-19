@@ -29,6 +29,8 @@ parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', acti
 parser.add_argument('--batch_size', help='Batch size for training', default=8, type=int)
 parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
 
+parser.add_argument('--dropout_p_point', help='Chance of dropping out p_point', default=0.0, type=float)
+
 
 parser.add_argument('--use_p_point_loss', help='add sum p_point to the loss ', action='store_true')
 parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=1.0, type=float)
@@ -116,6 +118,7 @@ def init_modules():
     consts["num_x"] = cfg.MAX_NUM_X
     consts["num_y"] = cfg.NUM_Y
     consts["hidden_size"] = cfg.HIDDEN_SIZE
+    consts["dropout_p_point"] = opt.dropout_p_point
 
     consts["batch_size"] = 5 if options["is_debugging"] else TRAINING_DATASET_CLS.BATCH_SIZE
     if options["is_debugging"]:

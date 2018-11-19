@@ -5,6 +5,7 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+import random
 
 from utils_pg import *
 
@@ -39,7 +40,7 @@ class WordProbLayer(nn.Module):
             init_xavier_weight(self.v)
             init_bias(self.bv)
 
-    def forward(self, ds, ac, y_emb, att_dist=None, xids=None, max_ext_len=None):
+    def forward(self, ds, ac, y_emb, att_dist=None, xids=None, max_ext_len=None, dropout_p_point=None):
         # NOTE: why is y_emb included in the term?
         h = T.cat((ds, ac, y_emb), 2)
         logit = T.tanh(F.linear(h, self.w_ds, self.b_ds))
@@ -52,6 +53,9 @@ class WordProbLayer(nn.Module):
                 p_vocab = T.cat((p_vocab, ext_zeros), 2)
             p_gen = T.sigmoid(F.linear(h, self.v, self.bv))
             p_w = (p_gen * p_vocab).scatter_add(2, xids, (1 - p_gen) * att_dist)
+            if dropout_p_point is not None and random.random() < dropout_p_point:
+                p_gen = 1
+
             return p_w, 1-p_gen
         else:
             p_w = p_vocab
