@@ -28,7 +28,9 @@ class Model(nn.Module):
         self.avg_nll = options["avg_nll"]
 
         self.use_p_point_loss = options["use_p_point_loss"]
+        self.user_w_prior_point_loss = options["use_w_prior_point_loss"]
 
+        self.x_ent = nn.modules.CrossEntropyLoss()
 
         self.eos_emb = modules["eos_emb"]
         self.lfw_emb = modules["lfw_emb"]
@@ -37,6 +39,7 @@ class Model(nn.Module):
         self.i2w = modules["i2w"]
 
         self.p_point_scalar = consts["p_point_scalar"]
+        self.w_prior_point_scalar = consts["w_prior_point_scalar"]
         self.dropout_p_point = consts["dropout_p_point"]
 
         self.dim_x = consts["dim_x"]
@@ -121,7 +124,8 @@ class Model(nn.Module):
 
 
     def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len, tf=None):
-
+        p_points = torch.Tensor([])
+        att_dists = torch.Tensor([])
         hs, dec_init_state = self.encode(x, len_x, mask_x)
 
         y_emb = self.w_rawdata_emb(y)
@@ -135,20 +139,19 @@ class Model(nn.Module):
 
         if tf:
             if self.copy and self.coverage:
-                hcs, dec_status, atted_context, att_dist, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
+                hcs, dec_status, atted_context, att_dists, xids, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext, init_coverage=acc_att)
             elif self.copy:
-                hcs, dec_status, atted_context, att_dist, xids = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext)
+                hcs, dec_status, atted_context, att_dists, xids = self.decoder(y_shifted, hs, h0, mask_x, mask_y, xid=x_ext)
             elif self.coverage:
-                hcs, dec_status, atted_context, att_dist, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, init_coverage=acc_att)
+                hcs, dec_status, atted_context, att_dists, acc_att = self.decoder(y_shifted, hs, h0, mask_x, mask_y, init_coverage=acc_att)
             else:
                 hcs, dec_status, atted_context = self.decoder(y_shifted, hs, h0, mask_x, mask_y)
 
             if self.copy:
-                y_pred, p_poins = self.word_prob(dec_status, atted_context, y_shifted, att_dist, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
+                y_pred, p_poins = self.word_prob(dec_status, atted_context, y_shifted, att_dists, xids, max_ext_len, dropout_p_point=self.dropout_p_point)
             else:
                 y_pred = self.word_prob(dec_status, atted_context, y_shifted, dropout_p_point=self.dropout_p_point)
         else:
-            p_poins = torch.Tensor([])
             testing_batch_size = x.size(1)
             y_preds = []
             dec_result = [[] for i in xrange(testing_batch_size)]
@@ -167,13 +170,24 @@ class Model(nn.Module):
                     break
                 if self.copy and self.coverage:
                     y_pred, dec_state, acc_att, att_dist, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, x_ext=x_ext)
+                    # accumulate p_point for every step in the batches
+                    p_points = torch.cat([p_points, p_gen])
+                    # accumulate attention distributions for every step in the batches
+                    att_dists = torch.cat([att_dists, att_dist])
                 elif self.copy:
                     y_pred, dec_state, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, x_ext=x_ext)
+                    # accumulate p_point for every step in the batches
+                    p_points = torch.cat([p_points, p_gen])
                 elif self.coverage:
                     y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
+                    # accumulate p_point for every step in the batches
+                    p_points = torch.cat([p_points, p_gen])
+                    # accumulate attention distributions for every step in the batches
+                    att_dists = torch.cat([att_dists, att_dist])
                 else:
                     y_pred, dec_state, p_gen = self.decode_once(y_shifted, hs, dec_state, mask_x)
-                p_poins = torch.cat([p_poins, p_gen])
+
+
                 dict_size = y_pred.shape[-1]
                 y_pred = y_pred.view(testing_batch_size, dict_size)
                 y_preds.append(y_pred)
@@ -209,16 +223,23 @@ class Model(nn.Module):
 
                 y_pred = torch.stack(y_preds)
         cost_p_point = None
+        cost_c = None
+        cost_w_prior_point = None
+
         if self.copy:
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
             if self.use_p_point_loss:
-                cost_p_point = self.p_point_scalar * torch.sum(p_poins.squeeze().mean(0))
+                cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
                 cost += cost_p_point
+            elif self.user_w_prior_point_loss:
+                p_points = p_points.transpose(0,1)
+                att_dists = att_dists.transpose(0,1)
+                y_pred_idx = y_pred.transpose(0,1).argmax(2)
+                cost_w_prior_point = (self.w_prior_point_scalar * (1-p_points))* (-self.x_ent(torch.rand_like(att_dists),att_dists[y_pred_idx].detach()))
         else:
             cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
 
         if self.coverage:
-            cost_c = T.mean(T.sum(T.min(att_dist, acc_att), 2))
-            return y_pred, cost, cost_c, cost_p_point
-        else:
-            return y_pred, cost, None, cost_p_point
+            cost_c = T.mean(T.sum(T.min(att_dists, acc_att), 2))
+
+        return y_pred, cost, cost_c, cost_p_point, cost_w_prior_point
