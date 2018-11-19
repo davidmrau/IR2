@@ -32,7 +32,7 @@ class LSTMAttentionDecoder(nn.Module):
         self.W_coverage = nn.ModuleList()
         self.W_att_concat = nn.Linear(self.ctx_size * self.n_heads, self.ctx_size, bias=False)
 
-        for i in n_heads:
+        for i in range(self.n_heads):
             self.Wc_att.append(nn.Parameter(torch.Tensor(self.ctx_size, self.ctx_size)))
             self.b_att.append(nn.Parameter(torch.Tensor(self.ctx_size)))
 
