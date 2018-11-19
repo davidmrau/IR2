@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 from utils_pg import *
 from gru_dec import *
-from lstm_dec_v2 import *
+from lstm_dec_v2_mh import *
 from word_prob_layer import *
 import random
 
@@ -43,6 +43,7 @@ class Model(nn.Module):
         self.len_x = consts["len_x"]
         self.len_y = consts["len_y"]
         self.hidden_size = consts["hidden_size"]
+        self.n_heads = consts["n_heads"]
         self.dict_size = consts["dict_size"]
         self.pad_token_idx = consts["pad_token_idx"]
         self.ctx_size = self.hidden_size * 2 if self.is_bidirectional else self.hidden_size
@@ -53,7 +54,7 @@ class Model(nn.Module):
             self.decoder = GRUAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
         else:
             self.encoder = nn.LSTM(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
-            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
+            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting)
 
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
         self.word_prob = WordProbLayer(self.hidden_size, self.ctx_size, self.dim_y, self.dict_size, self.device, self.copy, self.coverage)
