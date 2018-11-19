@@ -52,6 +52,7 @@ class WordProbLayer(nn.Module):
                 p_vocab = T.cat((p_vocab, ext_zeros), 2)
             p_gen = T.sigmoid(F.linear(h, self.v, self.bv))
             p_w = (p_gen * p_vocab).scatter_add(2, xids, (1 - p_gen) * att_dist)
+            return p_w, 1-p_gen
         else:
             p_w = p_vocab
 

@@ -28,6 +28,11 @@ parser.add_argument('--colab', help='Flag whether running on colab', action='sto
 parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
 parser.add_argument('--batch_size', help='Batch size for training', default=8, type=int)
 parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
+
+
+parser.add_argument('--use_p_point_loss', help='add sum p_point to the loss ', action='store_true')
+parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=1.0, type=float)
+
 opt = parser.parse_args()
 
 
@@ -50,6 +55,11 @@ def print_basic_info(modules, consts, options):
         print "USE LEARNABLE W2V EMBEDDING"
     if options["is_bidirectional"]:
         print "USE BI-DIRECTIONAL RNN"
+
+    if options["use_p_point_loss"]:
+        print "USE P_POINT LOSS"
+
+
     if options["omit_eos"]:
         print "<eos> IS OMITTED IN TESTING DATA"
     if options["prediction_bytes_limitation"]:
@@ -67,6 +77,8 @@ def init_modules():
     options["is_debugging"] = False
     options["is_predicting"] = False
     options["model_selection"] = False # When options["is_predicting"] = True, true means use validation set for tuning, false is real testing.
+
+    options["use_p_point_loss"] = opt.use_p_point_loss
 
     options["cuda"] = cfg.CUDA and torch.cuda.is_available()
     options["device"] = torch.device("cuda" if  options["cuda"] else "cpu")
@@ -93,6 +105,8 @@ def init_modules():
     consts = {}
 
     consts["idx_gpu"] = cudaid
+
+    consts["p_point_scalar"] = opt.p_point_scalar
 
     consts["norm_clip"] = cfg.NORM_CLIP
     consts["dim_x"] = cfg.DIM_X
@@ -584,11 +598,14 @@ def run(existing_model_name = None):
                         tf = teacher_forcing_ratio(steps)
                     else:
                         tf = True
-                    y_pred, cost, cost_c = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
+                    y_pred, cost, cost_c, cost_p_point = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
+
+                    if steps % 100 == 0:
+                        print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}".format(steps, cost, cost_c, cost_p_point))
                     if cost_c is None:
                         loss = cost
                     else:
