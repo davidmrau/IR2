@@ -606,7 +606,7 @@ def run(existing_model_name = None):
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
 
-                    if steps % 100 == 0:
+                    if steps % 1 == 0:
                         print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}".format(steps, cost, cost_c, cost_p_point))
                     if cost_c is None:
                         loss = cost

@@ -52,10 +52,9 @@ class WordProbLayer(nn.Module):
                 ext_zeros = Variable(torch.zeros(p_vocab.size(0), p_vocab.size(1), max_ext_len)).to(self.device)
                 p_vocab = T.cat((p_vocab, ext_zeros), 2)
             p_gen = T.sigmoid(F.linear(h, self.v, self.bv))
+            p_gen_mask_set_to_one = (torch.rand_like(p_gen) < dropout_p_point).float()
+            p_gen = p_gen * (1 - p_gen_mask_set_to_one) + 0.99 * p_gen_mask_set_to_one
             p_w = (p_gen * p_vocab).scatter_add(2, xids, (1 - p_gen) * att_dist)
-            if dropout_p_point is not None and random.random() < dropout_p_point:
-                p_gen = 1
-
             return p_w, 1-p_gen
         else:
             p_w = p_vocab
