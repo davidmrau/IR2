@@ -25,11 +25,11 @@ class LSTMAttentionDecoder(nn.Module):
         self.Ux = nn.Parameter(torch.Tensor(4 * self.hidden_size, self.hidden_size))
         self.bx = nn.Parameter(torch.Tensor(4 * self.hidden_size))
 
-        self.Wc_att = nn.ModuleList()
-        self.b_att = nn.ModuleList()
-        self.W_comb_att = nn.ModuleList()
-        self.U_att = nn.ModuleList()
-        self.W_coverage = nn.ModuleList()
+        self.Wc_att = nn.ParameterList()
+        self.b_att = nn.ParameterList()
+        self.W_comb_att = nn.ParameterList()
+        self.U_att = nn.ParameterList()
+        self.W_coverage = nn.ParameterList()
         self.W_att_concat = nn.Linear(self.ctx_size * self.n_heads, self.ctx_size, bias=False)
 
         for i in range(self.n_heads):
