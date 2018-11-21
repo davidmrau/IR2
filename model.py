@@ -37,7 +37,7 @@ class Model(nn.Module):
         self.max_len_predict = consts["max_len_predict"]
         self.min_len_predict = consts["min_len_predict"]
         self.i2w = modules["i2w"]
-
+        self.priors = modules["priors"]
         self.p_point_scalar = consts["p_point_scalar"]
         self.w_prior_point_scalar = consts["w_prior_point_scalar"]
         self.dropout_p_point = consts["dropout_p_point"]
@@ -232,11 +232,18 @@ class Model(nn.Module):
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
                 cost += cost_p_point
             elif self.use_w_prior_point_loss:
-                print(p_points.shape)
                 p_points = p_points.transpose(0,1)
                 att_dists = att_dists.transpose(0,1)
+                x = x.transpose(0,1)
                 y_pred_idx = y_pred.transpose(0,1).argmax(2)
-                cost_w_prior_point = (self.w_prior_point_scalar * (1-p_points))* (-self.x_ent(torch.rand_like(att_dists),att_dists[y_pred_idx].detach()))
+                cost_w_prior_point = 0
+                prior_x = self.priors[x]
+                for t in range(att_dists.size(1)):
+                    cost_w_prior_point += (p_points[:,t]*
+                    - ((prior_x* torch.log(1-att_dists[:,t]).detach()).sum())).mean()
+                att_dists = att_dists.transpose(0,1)
+                cost_w_prior_point = self.w_prior_point_scalar * cost_w_prior_point
+                print('p_points mean', p_points.mean())
         else:
             cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
 

@@ -150,6 +150,7 @@ def init_modules():
     modules = {}
 
     [_, dic, hfw, w2i, i2w, w2w] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "dic.pkl", "r"))
+    modules["priors"] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "prior.pkl", "rb"))
     consts["dict_size"] = len(dic)
     modules["dic"] = dic
     modules["w2i"] = w2i
@@ -613,30 +614,30 @@ def run(existing_model_name = None):
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
-                    if cost_c is None:
-                        loss = cost
-                    else:
-                        loss = cost + cost_c
-                        cost_c = cost_c.item()
-                        error_c += cost_c
+                    losses = [cost, cost_c, cost_p_point, cost_w_prior_point]
+                    loss = 0
+
+                    # TODO: implement averge batch costs
+                    for loss_ in losses:
+                        if loss_ is not None:
+                            loss += loss_
+
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
 
-                    cost = cost.item()
+                    cost = loss.item()
                     total_error += cost
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
-                    losses = [cost, cost_c, cost_p_point, cost_w_prior_point]
                     losses = [loss.item() if isinstance(loss, torch.Tensor) else loss for loss in losses]
-                    if steps % 1000 == 0:
+                    if steps % 1 == 0:
                         print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}, cost_w_prior_point {}".format(steps, cost, cost_c, cost_p_point, cost_w_prior_point))
                         pickle.dump(losses, open(cfg.cc.MODEL_PATH + model_name + '_losses_final.p', 'wb'))
-                    print(losses)
                     if partial_num_files / print_size == 1 and idx_batch < num_batches:
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
                         print "average cost until now:", "cost =", total_error / used_batch, ",",
-                        print "cost_c =", error_c / used_batch, ",",
+                        # print "cost_c =", error_c / used_batch, ",",
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
                         if not options["is_debugging"]:
@@ -646,7 +647,7 @@ def run(existing_model_name = None):
                         num_partial += 1
                     steps += 1
                 print "in this epoch, total average cost =", total_error / used_batch, ",",
-                print "cost_c =", error_c / used_batch, ",",
+                # print "cost_c =", error_c / used_batch, ",",
                 print "time:", time.time() - epoch_start
 
                 print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
