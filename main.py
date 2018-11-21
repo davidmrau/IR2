@@ -531,6 +531,9 @@ def predict(model, modules, consts, options):
     print si, total_num
 
 def run(existing_model_name = None):
+
+    losses = []
+
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
@@ -610,17 +613,12 @@ def run(existing_model_name = None):
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
-
-                    if steps % 1 == 0:
-                        print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}, cost_w_prior_point {}".format(steps, cost, cost_c, cost_p_point, cost_w_prior_point))
-
                     if cost_c is None:
                         loss = cost
                     else:
                         loss = cost + cost_c
                         cost_c = cost_c.item()
                         error_c += cost_c
-
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
@@ -629,6 +627,12 @@ def run(existing_model_name = None):
                     total_error += cost
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
+                    losses = [cost, cost_c, cost_p_point, cost_w_prior_point]
+                    losses = [loss.item() if isinstance(loss, torch.Tensor) else loss for loss in losses]
+                    if steps % 1000 == 0:
+                        print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}, cost_w_prior_point {}".format(steps, cost, cost_c, cost_p_point, cost_w_prior_point))
+                        pickle.dump(losses, open(cfg.cc.MODEL_PATH + model_name + '_losses_final.p', 'wb'))
+                    print(losses)
                     if partial_num_files / print_size == 1 and idx_batch < num_batches:
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
                         print "average cost until now:", "cost =", total_error / used_batch, ",",
