@@ -230,7 +230,6 @@ class Model(nn.Module):
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
             if self.use_p_point_loss:
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
-                cost += cost_p_point
             elif self.use_w_prior_point_loss:
                 p_points = p_points.transpose(0,1)
                 att_dists = att_dists.transpose(0,1)
