@@ -533,7 +533,7 @@ def predict(model, modules, consts, options):
 
 def run(existing_model_name = None):
 
-    losses = []
+    all_losses = []
 
     modules, consts, options = init_modules()
 
@@ -583,8 +583,8 @@ def run(existing_model_name = None):
             for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                total_error = 0.0
-                error_c = 0.0
+                av_batch_losses = None
+
                 partial_num_files = 0
                 epoch_start = time.time()
                 partial_start = time.time()
@@ -609,14 +609,12 @@ def run(existing_model_name = None):
                         tf = teacher_forcing_ratio(steps)
                     else:
                         tf = True
-                    y_pred, cost, cost_c, cost_p_point, cost_w_prior_point = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
+                    y_pred, losses = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
-                    losses = [cost, cost_c, cost_p_point, cost_w_prior_point]
                     loss = 0
-
                     # TODO: implement averge batch costs
                     for loss_ in losses:
                         if loss_ is not None:
@@ -626,18 +624,27 @@ def run(existing_model_name = None):
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
 
-                    cost = loss.item()
-                    total_error += cost
+                    total_error = loss.item()
+                    # append total loss to losses
+                    losses = np.append(loss.item(), losses)
+                    # transform tensors to floats
+                    losses = [loss.detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
+                    # if new batch reset
+                    if used_batch == 0:
+                        av_batch_losses = np.zeros(len(losses))
+                        print("first step: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*losses))
+                    # add current losses to av_batch_losses
+                    av_batch_losses = np.add(av_batch_losses, losses)
                     used_batch += 1
+
                     partial_num_files += consts["batch_size"]
-                    losses = [loss.item() if isinstance(loss, torch.Tensor) else loss for loss in losses]
-                    if steps % 1 == 0:
-                        print("Step: {} av_batch loss {}, cost_cov {}, cost_p_point {}, cost_w_prior_point {}".format(steps, cost, cost_c, cost_p_point, cost_w_prior_point))
-                        pickle.dump(losses, open(cfg.cc.MODEL_PATH + model_name + '_losses_final.p', 'wb'))
+
                     if partial_num_files / print_size == 1 and idx_batch < num_batches:
+                        print("Step: {}").format(steps)
+                        pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name + '_losses_final.p', 'wb'))
+
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
-                        print "average cost until now:", "cost =", total_error / used_batch, ",",
-                        # print "cost_c =", error_c / used_batch, ",",
+                        print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
                         if not options["is_debugging"]:
@@ -646,8 +653,9 @@ def run(existing_model_name = None):
                             print "finished"
                         num_partial += 1
                     steps += 1
-                print "in this epoch, total average cost =", total_error / used_batch, ",",
-                # print "cost_c =", error_c / used_batch, ",",
+                all_losses.append(av_batch_losses)
+                print("in this epoch:")
+                print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
                 print "time:", time.time() - epoch_start
 
                 print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)

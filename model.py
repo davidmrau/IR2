@@ -222,9 +222,9 @@ class Model(nn.Module):
                         dec_result[idx_doc].append(str(idx_max))
 
                 y_pred = torch.stack(y_preds)
-        cost_p_point = None
-        cost_c = None
-        cost_w_prior_point = None
+        cost_p_point = 0
+        cost_c = 0
+        cost_w_prior_point = 0
 
         if self.copy:
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
@@ -242,11 +242,10 @@ class Model(nn.Module):
                     - ((prior_x* torch.log(1-att_dists[:,t]).detach()).sum())).mean()
                 att_dists = att_dists.transpose(0,1)
                 cost_w_prior_point = self.w_prior_point_scalar * cost_w_prior_point
-                print('p_points mean', p_points.mean())
         else:
             cost = self.nll_loss(y_pred, y, mask_y, self.avg_nll)
 
         if self.coverage:
             cost_c = T.mean(T.sum(T.min(att_dists, acc_att), 2))
 
-        return y_pred, cost, cost_c, cost_p_point, cost_w_prior_point
+        return y_pred, [cost, cost_c, cost_p_point, cost_w_prior_point]
