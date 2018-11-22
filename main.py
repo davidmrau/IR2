@@ -123,6 +123,8 @@ def init_modules():
     consts["num_x"] = cfg.MAX_NUM_X
     consts["num_y"] = cfg.NUM_Y
     consts["hidden_size"] = cfg.HIDDEN_SIZE
+
+    consts["n_heads"] = cfg.N_HEADS
     consts["dropout_p_point"] = opt.dropout_p_point
 
     consts["batch_size"] = 5 if options["is_debugging"] else TRAINING_DATASET_CLS.BATCH_SIZE

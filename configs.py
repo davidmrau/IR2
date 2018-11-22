@@ -67,6 +67,7 @@ class DeepmindConfigs():
 
         self.NUM_Y = 1
         self.HIDDEN_SIZE = 256
+        self.N_HEADS = 4
 
         self.UNI_LOW_FREQ_THRESHOLD = 10
 
