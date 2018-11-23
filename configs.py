@@ -3,18 +3,18 @@
 import os
 
 class CommonConfigs(object):
-    def __init__(self, d_type):
+    def __init__(self, d_type, RESULT_PATH):
         self.ROOT_PATH = ""
         self.TRAINING_DATA_PATH = self.ROOT_PATH + d_type + "/train_set/"
         self.VALIDATE_DATA_PATH = self.ROOT_PATH + d_type + "/validate_set/"
         self.TESTING_DATA_PATH = self.ROOT_PATH + d_type + "/test_set/"
-        self.RESULT_PATH = self.ROOT_PATH + d_type + "/result/"
-        self.MODEL_PATH = self.ROOT_PATH + d_type + "/model/"
-        self.BEAM_SUMM_PATH = self.RESULT_PATH + "/beam_summary/"
-        self.BEAM_GT_PATH = self.RESULT_PATH + "/beam_ground_truth/"
-        self.GROUND_TRUTH_PATH = self.RESULT_PATH + "/ground_truth/"
-        self.SUMM_PATH = self.RESULT_PATH + "/summary/"
-        self.TMP_PATH = self.ROOT_PATH + d_type + "/tmp/"
+        self.RESULT_PATH = RESULT_PATH + d_type
+        self.MODEL_PATH = RESULT_PATH + d_type + "/model/"
+        self.BEAM_SUMM_PATH = RESULT_PATH + "/beam_summary/"
+        self.BEAM_GT_PATH = RESULT_PATH + "/beam_ground_truth/"
+        self.GROUND_TRUTH_PATH = RESULT_PATH + "/ground_truth/"
+        self.SUMM_PATH = RESULT_PATH+ "/summary/"
+        self.TMP_PATH = RESULT_PATH + d_type + "/tmp/"
 
 
 class DeepmindTraining(object):
@@ -35,11 +35,11 @@ class DeepmindTesting(object):
     REMOVES_PUNCTION = False
 
 class DeepmindConfigs():
-    def __init__(self, colab):
+    def __init__(self, colab,RESULT_PATH):
         if colab:
-            self.cc = CommonConfigs("drive/My Drive/IR2/deepmind/")
+            self.cc = CommonConfigs("drive/My Drive/IR2/deepmind/",RESULT_PATH)
         else:
-            self.cc = CommonConfigs("../deepmind/")
+            self.cc = CommonConfigs("../deepmind/",RESULT_PATH)
 
         self.CELL = "lstm" # gru or lstm
         self.CUDA = True

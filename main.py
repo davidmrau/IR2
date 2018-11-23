@@ -37,13 +37,29 @@ parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=
 
 parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', action='store_true')
 parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
+parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
 
 opt = parser.parse_args()
 
 
-cfg = DeepmindConfigs(opt.colab)
+cfg = DeepmindConfigs(opt.colab,opt.result_path)
 TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
 TESTING_DATASET_CLS = DeepmindTesting
+
+
+def create_folder(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+create_folder(opt.result_path)
+create_folder(opt.result_path+'/tmp')
+create_folder(opt.result_path+'/model')
+create_folder(opt.result_path+'/beam_summary')
+create_folder(opt.result_path+'/beam_ground_truth')
+create_folder(opt.result_path+'/ground_truth')
+create_folder(opt.result_path+'/summary')
+
+
 
 def print_basic_info(modules, consts, options):
     if options["is_debugging"]:
@@ -575,11 +591,11 @@ def run(existing_model_name = None):
                 existing_model_name = "cnndm.s2s.gpu4.epoch7.1"
             print "loading existed model:", existing_model_name
             model, optimizer = load_model(cfg.cc.MODEL_PATH + existing_model_name, model, optimizer)
-
         if training_model:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
             steps = 0
+            print(model)
             last_total_error = float("inf")
             print "max epoch:", consts["max_epoch"]
             for epoch in xrange(0, consts["max_epoch"]):
@@ -655,7 +671,7 @@ def run(existing_model_name = None):
                             print "finished"
                         num_partial += 1
                     steps += 1
-                all_losses.append(av_batch_losses)
+                all_losses.append(av_batch_losses/used_batch)
                 print("in this epoch:")
                 print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
                 print "time:", time.time() - epoch_start

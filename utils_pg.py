@@ -65,7 +65,7 @@ def save_model(f, model, optimizer):
     torch.save({"model_state_dict" : model.state_dict(),
             "optimizer_state_dict" : optimizer.state_dict()},
             f)
- 
+
 def load_model(f, model, optimizer):
     checkpoint = torch.load(f)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -75,7 +75,7 @@ def load_model(f, model, optimizer):
 def sort_samples(x, len_x, mask_x, y, len_y, \
                  mask_y, oys, x_ext, y_ext, oovs):
     sorted_x_idx = np.argsort(len_x)[::-1]
-    
+
     sorted_x_len = np.array(len_x)[sorted_x_idx]
     sorted_x = x[:, sorted_x_idx]
     sorted_x_mask = mask_x[:, sorted_x_idx, :]
@@ -87,7 +87,7 @@ def sort_samples(x, len_x, mask_x, y, len_y, \
     sorted_oys = [oys[i] for i in sorted_x_idx]
     sorted_x_ext = x_ext[:, sorted_x_idx]
     sorted_y_ext = y_ext[:, sorted_x_idx]
-    
+
     return sorted_x, sorted_x_len, sorted_x_mask, sorted_y, \
            sorted_y_len, sorted_y_mask, sorted_oys, \
            sorted_x_ext, sorted_y_ext, sorted_oovs
@@ -103,7 +103,7 @@ def print_sent_dec(y_pred, y, y_mask, oovs, modules, consts, options, batch_size
         print idx_doc + 1, "----------------------------------------------------------------------------------------------------"
         sent_true= ""
         for idx_word in range(max_y_words[idx_doc]):
-            i = y[idx_word, idx_doc] if options["has_learnable_w2v"] else np.argmax(y[idx_word, idx_doc]) 
+            i = y[idx_word, idx_doc] if options["has_learnable_w2v"] else np.argmax(y[idx_word, idx_doc])
             if i in modules["i2w"]:
                 sent_true += modules["i2w"][i]
             else:
@@ -131,7 +131,7 @@ def print_sent_dec(y_pred, y, y_mask, oovs, modules, consts, options, batch_size
         else:
             print sent_pred
     print "----------------------------------------------------------------------------------------------------"
-    print 
+    print
 
 
 def write_for_rouge(fname, ref_sents, dec_words, cfg):
@@ -218,5 +218,3 @@ def write_summ(dst_path, summ_list, num_summ, options, i2w = None, oovs=None, sc
 
                 f_summ.write(s)
                 f_summ.write("\n")
-
-

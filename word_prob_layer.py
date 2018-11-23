@@ -61,3 +61,8 @@ class WordProbLayer(nn.Module):
             p_w = p_vocab
 
         return p_w
+
+    def __repr__(self):
+        return ("Word Prob Layer(hidden_size={},out_features={})")\
+               .format(self.hidden_size,
+                       self.dict_size)
