@@ -35,7 +35,7 @@ class DeepmindTesting(object):
     REMOVES_PUNCTION = False
 
 class DeepmindConfigs():
-    def __init__(self, colab,RESULT_PATH):
+    def __init__(self, colab,RESULT_PATH, n_heads):
         if colab:
             self.cc = CommonConfigs("drive/My Drive/IR2/deepmind/",RESULT_PATH)
         else:
@@ -67,7 +67,7 @@ class DeepmindConfigs():
 
         self.NUM_Y = 1
         self.HIDDEN_SIZE = 256
-        self.N_HEADS = 4
+        self.N_HEADS = n_heads
 
         self.UNI_LOW_FREQ_THRESHOLD = 10
 

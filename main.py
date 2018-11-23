@@ -39,10 +39,12 @@ parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', 
 parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
 parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
 
+parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
+
 opt = parser.parse_args()
 
 
-cfg = DeepmindConfigs(opt.colab,opt.result_path)
+cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
 TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
 TESTING_DATASET_CLS = DeepmindTesting
 
