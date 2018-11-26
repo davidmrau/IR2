@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 from utils_pg import *
 from gru_dec import *
-from lstm_dec_v2_mh import *
+from lstm_dec_v1_mh import *
 from word_prob_layer import *
 import random
 
