@@ -103,6 +103,7 @@ def init_modules():
 
     options["use_p_point_loss"] = opt.use_p_point_loss
     options["use_w_prior_point_loss"] = opt.use_w_prior_point_loss
+    options["tf_offset_decay"] = opt.tf_offset
 
     options["cuda"] = cfg.CUDA and torch.cuda.is_available()
     options["device"] = torch.device("cuda" if  options["cuda"] else "cpu")
@@ -180,8 +181,7 @@ def init_modules():
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
 
     return modules, consts, options
-def teacher_forcing_ratio(steps):
-    offset = 350000
+def teacher_forcing_ratio(steps, offset):
     if steps < offset:
         return False
     else:
@@ -626,7 +626,7 @@ def run(existing_model_name = None):
                     model.zero_grad()
 
                     if opt.tf_schedule:
-                        tf = teacher_forcing_ratio(steps)
+                        tf = teacher_forcing_ratio(steps, options["tf_offset_decay"])
                     else:
                         tf = True
                     y_pred, losses = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\

@@ -16,9 +16,9 @@ class LSTMAttentionDecoder(nn.Module):
         self.is_predicting = is_predicting
         self.device = device
         self.copy = copy
-        self.coverage = coverage 
+        self.coverage = coverage
         self.n_heads = n_heads
-        
+
         self.lstm_1 = nn.LSTMCell(self.input_size, self.hidden_size)
 
         self.W_att_concat = nn.Linear(self.ctx_size, self.ctx_size, bias=False)
@@ -70,10 +70,10 @@ class LSTMAttentionDecoder(nn.Module):
         def recurrence(x, y_mask, hidden, pctx, context, x_mask, acc_att=None):
             pre_h, pre_c = hidden
 
-            h1, c1 = self.lstm_1(x, hidden)  
+            h1, c1 = self.lstm_1(x, hidden)
             h1 = y_mask * h1 + (1.0 - y_mask) * pre_h
             c1 = y_mask * c1 + (1.0 - y_mask) * pre_c
-            
+
             # len(x) * batch_size * 1
             s = T.cat((h1.view(-1, self.hidden_size), c1.view(-1, self.hidden_size)), 1)
             if self.coverage:
@@ -88,9 +88,9 @@ class LSTMAttentionDecoder(nn.Module):
             # linear
             atted_ctx = self.W_att_concat(atted_ctx)
 
-            word_atten = word_atten[:,:,0]a
+            word_atten = word_atten[:,:,0]
             word_atten_ = T.transpose(word_atten.view(x_mask.size(0), -1), 0, 1)
-            
+
             if self.coverage:
                 acc_att += word_atten_
                 return (h1, c1), h1, atted_ctx, word_atten_, acc_att
@@ -100,14 +100,14 @@ class LSTMAttentionDecoder(nn.Module):
         hs, cs, ss, atts, dists, xids, Cs = [], [], [], [], [], [], []
         hidden = init_state
         acc_att = init_coverage
-        if self.copy: 
+        if self.copy:
             xid = T.transpose(xid, 0, 1) # B * len(x)
 
         pctx = F.linear(context, self.Wc_att, self.b_att)
         pv = F.linear(context, self.Wv_att, self.bv_att)
         pv = torch.stack(torch.chunk(pv, self.n_heads, -1), -2)
         x = y_emb
-        
+
         steps = range(y_emb.size(0))
         for i in steps:
             if self.coverage:
@@ -121,13 +121,13 @@ class LSTMAttentionDecoder(nn.Module):
             atts += [att]
             dists += [att_dist]
             xids += [xid]
-        
+
         if self.coverage:
             if self.is_predicting :
                 Cs += [acc_att]
                 Cs = Cs[1:]
             Cs = T.stack(Cs).view(y_emb.size(0), *Cs[0].size())
-        
+
 
         hs = T.stack(hs).view(y_emb.size(0), *hs[0].size())
         cs = T.stack(cs).view(y_emb.size(0), *cs[0].size())
@@ -136,7 +136,7 @@ class LSTMAttentionDecoder(nn.Module):
         dists = T.stack(dists).view(y_emb.size(0), *dists[0].size())
         if self.copy:
             xids = T.stack(xids).view(y_emb.size(0), *xids[0].size())
-        
+
         if self.copy and self.coverage:
             return (hs, cs), ss, atts, dists, xids, Cs
         elif self.copy:
@@ -145,5 +145,3 @@ class LSTMAttentionDecoder(nn.Module):
             return (hs, cs), ss, atts, dists, Cs
         else:
             return (hs, cs), ss, atts
-
-
