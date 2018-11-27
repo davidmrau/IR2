@@ -26,7 +26,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
 parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
-parser.add_argument('--batch_size', help='Batch size for training', default=8, type=int)
+parser.add_argument('--batch_size', help='Batch size for training', default=4, type=int)
 parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
 
 parser.add_argument('--dropout_p_point', help='Chance of dropping out p_point', default=0.0, type=float)
@@ -648,7 +648,7 @@ def run(existing_model_name = None):
                     # append total loss to losses
                     losses = np.append(loss.item(), losses)
                     # transform tensors to floats
-                    losses = [loss.detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
+                    losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
                     # if new batch reset
                     if used_batch == 0:
                         av_batch_losses = np.zeros(len(losses))
@@ -656,12 +656,11 @@ def run(existing_model_name = None):
                     # add current losses to av_batch_losses
                     av_batch_losses = np.add(av_batch_losses, losses)
                     used_batch += 1
-
                     partial_num_files += consts["batch_size"]
 
                     if partial_num_files / print_size == 1 and idx_batch < num_batches:
                         print("Step: {}").format(steps)
-                        pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name + '_losses_final.p', 'wb'))
+                        pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name +'_losses_final.p', 'wb'))
 
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
                         print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
@@ -669,7 +668,7 @@ def run(existing_model_name = None):
                         partial_num_files = 0
                         if not options["is_debugging"]:
                             print "save model... ",
-                            save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
+                            save_model(cfg.cc.MODEL_PATH + model_name +".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
                             print "finished"
                         num_partial += 1
                     steps += 1

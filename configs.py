@@ -9,12 +9,12 @@ class CommonConfigs(object):
         self.VALIDATE_DATA_PATH = self.ROOT_PATH + d_type + "/validate_set/"
         self.TESTING_DATA_PATH = self.ROOT_PATH + d_type + "/test_set/"
         self.RESULT_PATH = RESULT_PATH + d_type
-        self.MODEL_PATH = RESULT_PATH + d_type + "/model/"
+        self.MODEL_PATH = RESULT_PATH + "/model/"
         self.BEAM_SUMM_PATH = RESULT_PATH + "/beam_summary/"
         self.BEAM_GT_PATH = RESULT_PATH + "/beam_ground_truth/"
         self.GROUND_TRUTH_PATH = RESULT_PATH + "/ground_truth/"
         self.SUMM_PATH = RESULT_PATH+ "/summary/"
-        self.TMP_PATH = RESULT_PATH + d_type + "/tmp/"
+        self.TMP_PATH = RESULT_PATH  + "/tmp/"
 
 
 class DeepmindTraining(object):

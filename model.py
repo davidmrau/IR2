@@ -125,8 +125,8 @@ class Model(nn.Module):
 
 
     def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len, tf=None):
-        p_points = torch.Tensor([])
-        att_dists = torch.Tensor([])
+        p_points = []
+        att_dists = []
         hs, dec_init_state = self.encode(x, len_x, mask_x)
 
         y_emb = self.w_rawdata_emb(y)
@@ -172,21 +172,21 @@ class Model(nn.Module):
                 if self.copy and self.coverage:
                     y_pred, dec_state, acc_att, att_dist, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, acc_att=acc_att, x_ext=x_ext)
                     # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_point])
+                    p_points.append(p_point)
                     # accumulate attention distributions for every step in the batches
-                    att_dists = torch.cat([att_dists, att_dist])
+                    att_dists.append(att_dist)
                 elif self.copy:
                     y_pred, dec_state, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x, x, max_ext_len, x_ext=x_ext)
                     # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_point])
+                    p_points.append(p_point)
                 elif self.coverage:
                     y_pred, dec_state, acc_att, att_dist = self.decode_once(y_shifted, hs, dec_state, mask_x, acc_att=acc_att)
                     # accumulate attention distributions for every step in the batches
-                    att_dists = torch.cat([att_dists, att_dist])
+                    att_dists.append(att_dist)
                 else:
                     y_pred, dec_state, p_point = self.decode_once(y_shifted, hs, dec_state, mask_x)
                     # accumulate p_point for every step in the batches
-                    p_points = torch.cat([p_points, p_point])
+                    p_points.append(p_point)
 
 
                 dict_size = y_pred.shape[-1]
@@ -226,6 +226,8 @@ class Model(nn.Module):
         cost_p_point = 0
         cost_c = 0
         cost_w_prior_point = 0
+        p_points = torch.stack(p_points)
+        att_dists = torch.stack(att_dists)
 
         if self.copy:
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
