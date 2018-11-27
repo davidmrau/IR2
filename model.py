@@ -118,8 +118,10 @@ class Model(nn.Module):
         else:
             y_pred = self.word_prob(dec_status, atted_context, y_emb, dropout_p_point=self.dropout_p_point)
 
-        if self.coverage:
+        if self.coverage and self.copy:
             return y_pred, hcs, C, att_dist, p_point
+        elif self.coverage and not self.copy:
+            return y_pred, hcs, C, att_dist
         else:
             return y_pred, hcs, p_point
 
@@ -226,10 +228,11 @@ class Model(nn.Module):
         cost_p_point = 0
         cost_c = 0
         cost_w_prior_point = 0
-        p_points = torch.stack(p_points)
-        att_dists = torch.stack(att_dists)
+        if self.coverage or self.use_w_prior_point_loss:
+            att_dists = torch.stack(att_dists)
 
         if self.copy:
+            p_points = torch.stack(p_points)
             cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
             if self.use_p_point_loss:
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
