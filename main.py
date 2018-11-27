@@ -161,8 +161,8 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 150 if options["is_debugging"] else 30
-    consts["print_time"] = 5
+    consts["max_epoch"] = 10 if options["is_debugging"] else 10
+    consts["print_time"] = 100
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
@@ -634,19 +634,19 @@ def run(existing_model_name = None):
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
-                    loss = 0
+                    print(losses)
+                    total_loss = 0
                     # TODO: implement averge batch costs
                     for loss_ in losses:
                         if loss_ is not None:
-                            loss += loss_
+                            total_loss += loss_
 
-                    loss.backward()
+                    total_loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
 
-                    total_error = loss.item()
                     # append total loss to losses
-                    losses = np.append(loss.item(), losses)
+                    losses = np.append(total_loss.item(), losses)
                     # transform tensors to floats
                     losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
                     # if new batch reset
@@ -657,10 +657,8 @@ def run(existing_model_name = None):
                     av_batch_losses = np.add(av_batch_losses, losses)
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
-
-                    if partial_num_files / print_size == 1 and idx_batch < num_batches:
+                    if partial_num_files % print_size == 0 and idx_batch < num_batches:
                         print("Step: {}").format(steps)
-                        pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name +'_losses_final.p', 'wb'))
 
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
                         print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
@@ -673,6 +671,8 @@ def run(existing_model_name = None):
                         num_partial += 1
                     steps += 1
                 all_losses.append(av_batch_losses/used_batch)
+
+                pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name +'_losses_final.p', 'wb'))
                 print("in this epoch:")
                 print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
                 print "time:", time.time() - epoch_start
