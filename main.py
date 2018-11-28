@@ -37,12 +37,12 @@ parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=
 
 parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', action='store_true')
 parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
+
 parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
 
 parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
 
 opt = parser.parse_args()
-
 
 cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
 TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
@@ -162,7 +162,7 @@ def init_modules():
     consts["beam_size"] = cfg.BEAM_SIZE
 
     consts["max_epoch"] = 10 if options["is_debugging"] else 10
-    consts["print_time"] = 100
+    consts["print_time"] = 50
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
@@ -634,7 +634,6 @@ def run(existing_model_name = None):
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
                                    batch.max_ext_len, tf)
-                    print(losses)
                     total_loss = 0
                     # TODO: implement averge batch costs
                     for loss_ in losses:
@@ -649,6 +648,10 @@ def run(existing_model_name = None):
                     losses = np.append(total_loss.item(), losses)
                     # transform tensors to floats
                     losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
+
+                    with open(opt.result_path + '/result.log', "a") as log_file:
+                        log_file.write("epoch {}, step {}, total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}\n".format(epoch, steps,*losses))
+
                     # if new batch reset
                     if used_batch == 0:
                         av_batch_losses = np.zeros(len(losses))
