@@ -233,7 +233,12 @@ class Model(nn.Module):
 
         if self.copy:
             p_points = torch.stack(p_points)
-            cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
+            try:
+                cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
+            except:
+                print('Calculating the cost using the copy mechanism failed.')
+                print('y_pred shape: ', y_pred.shape, ', y_ext shape: ', y_ext.shape, ', mask_y shape: ', mask_y.shape)
+
             if self.use_p_point_loss:
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
             elif self.use_w_prior_point_loss:
