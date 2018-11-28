@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 from utils_pg import *
 from gru_dec import *
-from lstm_dec_v1_mh import *
+from lstm_dec_v1 import *
 from word_prob_layer import *
 import random
 
@@ -38,6 +38,7 @@ class Model(nn.Module):
         self.min_len_predict = consts["min_len_predict"]
         self.i2w = modules["i2w"]
         self.priors = modules["priors"]
+        self.priors = self.priors.to(self.device)
         self.p_point_scalar = consts["p_point_scalar"]
         self.w_prior_point_scalar = consts["w_prior_point_scalar"]
         self.dropout_p_point = consts["dropout_p_point"]
@@ -58,7 +59,7 @@ class Model(nn.Module):
             self.decoder = GRUAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
         else:
             self.encoder = nn.LSTM(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
-            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting)
+            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
 
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
         self.word_prob = WordProbLayer(self.hidden_size, self.ctx_size, self.dim_y, self.dict_size, self.device, self.copy, self.coverage)
@@ -222,17 +223,18 @@ class Model(nn.Module):
                         existence[idx_doc] = False
                         num_left -= 1
                     else:
-                        dec_result[idx_doc].append(str(idx_max))
+                        dec_result[idx_d/oc].append(str(idx_max))
 
                 y_pred = torch.stack(y_preds)
         cost_p_point = 0
         cost_c = 0
         cost_w_prior_point = 0
-        if self.coverage or self.use_w_prior_point_loss:
+        if (not tf) and (self.coverage or self.use_w_prior_point_loss):
             att_dists = torch.stack(att_dists)
 
         if self.copy:
-            p_points = torch.stack(p_points)
+            if not tf:
+                p_points = torch.stack(p_points)
             try:
                 cost = self.nll_loss(y_pred, y_ext, mask_y, self.avg_nll)
             except:
