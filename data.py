@@ -7,7 +7,11 @@ import time
 from operator import itemgetter
 import numpy as np
 import cPickle as pickle
+import random
 from random import shuffle
+
+np.random.seed(123)
+random.seed(123)
 
 class BatchData:
     def __init__(self, flist, modules, consts, options):

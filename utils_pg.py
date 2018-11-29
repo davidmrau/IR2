@@ -13,11 +13,11 @@ import torch
 from torch import nn
 
 
-def init_seeds():
-    random.seed(123)
-    torch.manual_seed(123)
+def init_seeds(steps=123):
+    random.seed(steps)
+    torch.manual_seed(steps)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(123)
+        torch.cuda.manual_seed_all(steps)
 
 def init_lstm_weight(lstm):
     for param in lstm.parameters():
@@ -61,16 +61,20 @@ def rebuild_dir(path):
             pass
     os.mkdir(path)
 
-def save_model(f, model, optimizer):
+def save_model(f, model, optimizer, all_losses, av_batch_losses):
     torch.save({"model_state_dict" : model.state_dict(),
-            "optimizer_state_dict" : optimizer.state_dict()},
+            "optimizer_state_dict" : optimizer.state_dict(),
+            "av_losses": all_losses,
+            "av_batch_losses": av_batch_losses},
             f)
 
 def load_model(f, model, optimizer):
     checkpoint = torch.load(f)
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    return model, optimizer
+    all_losses = checkpoint["av_losses"]
+    av_batch_losses = checkpoint["av_batch_losses"]
+    return model, optimizer, all_losses, av_batch_losses
 
 def sort_samples(x, len_x, mask_x, y, len_y, \
                  mask_y, oys, x_ext, y_ext, oovs):

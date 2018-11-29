@@ -20,7 +20,7 @@ import data as datar
 from model import *
 from utils_pg import *
 from configs import *
-
+import re
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -32,16 +32,18 @@ parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', 
 parser.add_argument('--dropout_p_point', help='Chance of dropping out p_point', default=0.0, type=float)
 
 
-parser.add_argument('--use_p_point_loss', help='use p_point to the loss ', action='store_true')
 parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=1.0, type=float)
+parser.add_argument('--use_p_point_loss', help='use p_point to the loss ', action='store_true')
 
 parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', action='store_true')
 parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
 
+
 parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
+parser.add_argument('--model_name', help='model file name that should be continued training', default='', type=str)
+parser.add_argument('--continue_training', help='flag for continue training ', action='store_true')
 
 parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
-
 opt = parser.parse_args()
 
 cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
@@ -551,10 +553,9 @@ def predict(model, modules, consts, options):
             partial_num = 0
     print si, total_num
 
-def run(existing_model_name = None):
+def run():
 
     all_losses = []
-
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
@@ -586,24 +587,27 @@ def run(existing_model_name = None):
             model.cuda()
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
 
-        model_name = "".join(["cnndm.s2s.", options["cell"]])
         existing_epoch = 0
-        if need_load_model:
-            if existing_model_name == None:
-                existing_model_name = "cnndm.s2s.gpu4.epoch7.1"
-            print "loading existed model:", existing_model_name
-            model, optimizer = load_model(cfg.cc.MODEL_PATH + existing_model_name, model, optimizer)
+        if opt.continue_training or options['is_predicting']:
+            print "loading existed model:", opt.model_name
+            continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
+            model, optimizer, all_losses, av_batch_losses = load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
+            if opt.continue_training:
+                print('Continue training model from step {}'.format(continue_step))
         if training_model:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
             steps = 0
             print(model)
+            # cnndm.s2s.lstm.gpu0.epoch0.7
             last_total_error = float("inf")
             print "max epoch:", consts["max_epoch"]
-            for epoch in xrange(0, consts["max_epoch"]):
+            #for epoch in xrange(0, consts["max_epoch"]):
+            for epoch in xrange(0, 2):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                av_batch_losses = None
+                if not opt.continue_training:
+                    av_batch_losses = np.zeros(5)
 
                 partial_num_files = 0
                 epoch_start = time.time()
@@ -611,7 +615,20 @@ def run(existing_model_name = None):
                 # shuffle the trainset
                 batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
                 used_batch = 0.
-                for idx_batch in xrange(num_batches):
+
+                #for idx_batch in xrange(num_batches):
+                for idx_batch in xrange(20):
+                    if opt.continue_training and steps <= continue_step:
+                        used_batch += 1
+                        init_seeds(steps)
+                        steps += 1
+                        partial_num_files += consts["batch_size"]
+                        if partial_num_files % print_size == 0 and idx_batch < num_batches:
+                            partial_num_files =0
+                            num_partial += 1
+
+                        continue
+
                     train_idx = batch_list[idx_batch]
                     batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
                     if len(batch_raw) != consts["batch_size"]:
@@ -649,14 +666,12 @@ def run(existing_model_name = None):
                     # transform tensors to floats
                     losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
 
-                    with open(opt.result_path + '/result.log', "a") as log_file:
-                        log_file.write("epoch {}, step {}, total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}\n".format(epoch, steps,*losses))
+                   # with open(opt.result_path + '/result.log', "a") as log_file:
+                   #     log_file.write("epoch {}, step {}, total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}\n".format(epoch, steps,*losses))
 
                     # if new batch reset
-                    if used_batch == 0:
-                        av_batch_losses = np.zeros(len(losses))
-                        print("first step: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*losses))
                     # add current losses to av_batch_losses
+
                     av_batch_losses = np.add(av_batch_losses, losses)
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
@@ -669,31 +684,28 @@ def run(existing_model_name = None):
                         partial_num_files = 0
                         if not options["is_debugging"]:
                             print "save model... ",
-                            save_model(cfg.cc.MODEL_PATH + model_name +".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
+                            save_model(cfg.cc.MODEL_PATH+ "/model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses)
+                            all_losses.append(av_batch_losses/used_batch)
                             print "finished"
                         num_partial += 1
+                    init_seeds(steps)
                     steps += 1
-                all_losses.append(av_batch_losses/used_batch)
 
-                pickle.dump(all_losses, open(cfg.cc.MODEL_PATH + model_name +'_losses_final.p', 'wb'))
                 print("in this epoch:")
                 print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
                 print "time:", time.time() - epoch_start
+                try:
+                    print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
+                except:
+                    pass
 
-                print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
-
-                if last_total_error > total_error or options["is_debugging"]:
-                    last_total_error = total_error
-                    if not options["is_debugging"]:
-                        print "save model... ",
-                        save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
-                        print "finished"
-                else:
-                    print "optimization finished"
-                    break
+                if not options["is_debugging"]:
+                    print "save model... ",
+                    save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".steps" + str(steps), model, optimizer, all_losses, av_batch_losses)
+                    print "finished"
 
             print "save final model... ",
-            save_model(cfg.cc.MODEL_PATH + model_name + ".final.gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
+            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses)
             print "finished"
         else:
             print "skip training model"
@@ -704,5 +716,4 @@ def run(existing_model_name = None):
 
 if __name__ == "__main__":
     np.set_printoptions(threshold = np.inf)
-    existing_model_name = sys.argv[1] if len(sys.argv) > 1 else None
-    run(existing_model_name)
+    run()
