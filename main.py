@@ -41,7 +41,6 @@ parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point los
 
 parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
 parser.add_argument('--model_name', help='model file name that should be continued training', default='', type=str)
-parser.add_argument('--continue_training', help='flag for continue training ', action='store_true')
 
 parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
 opt = parser.parse_args()
@@ -163,8 +162,8 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 10 if options["is_debugging"] else 10
-    consts["print_time"] = 50
+    consts["max_epoch"] = 10 if options["is_debugging"] else 30
+    consts["print_time"] = 10
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
@@ -588,11 +587,14 @@ def run():
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
 
         existing_epoch = 0
-        if opt.continue_training or options['is_predicting']:
+        continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
+        if continue_training or options['is_predicting']:
+            if opt.model_name == '':
+                opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH))))[0]
             print "loading existed model:", opt.model_name
             continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
             model, optimizer, all_losses, av_batch_losses = load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
-            if opt.continue_training:
+            if continue_training:
                 print('Continue training model from step {}'.format(continue_step))
         if training_model:
             print "start training model "
@@ -602,11 +604,10 @@ def run():
             # cnndm.s2s.lstm.gpu0.epoch0.7
             last_total_error = float("inf")
             print "max epoch:", consts["max_epoch"]
-            #for epoch in xrange(0, consts["max_epoch"]):
-            for epoch in xrange(0, 2):
+            for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                if not opt.continue_training:
+                if not continue_training:
                     av_batch_losses = np.zeros(5)
 
                 partial_num_files = 0
@@ -616,9 +617,8 @@ def run():
                 batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
                 used_batch = 0.
 
-                #for idx_batch in xrange(num_batches):
-                for idx_batch in xrange(20):
-                    if opt.continue_training and steps <= continue_step:
+                for idx_batch in xrange(num_batches):
+                    if continue_training and steps <= continue_step:
                         used_batch += 1
                         init_seeds(steps)
                         steps += 1
@@ -701,7 +701,7 @@ def run():
 
                 if not options["is_debugging"]:
                     print "save model... ",
-                    save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".steps" + str(steps), model, optimizer, all_losses, av_batch_losses)
+                    save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses)
                     print "finished"
 
             print "save final model... ",

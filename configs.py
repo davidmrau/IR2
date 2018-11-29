@@ -44,7 +44,7 @@ class DeepmindConfigs():
         self.CELL = "lstm" # gru or lstm
         self.CUDA = True
         self.COPY = True
-        self.COVERAGE = True
+        self.COVERAGE = False
         self.BI_RNN = True
         self.BEAM_SEARCH = True
         self.BEAM_SIZE = 4
