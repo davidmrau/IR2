@@ -11,6 +11,6 @@ module load NCCL/2.0.5-CUDA-9.0.176
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:/hpc/eb/Debian9/cuDNN/7.1-CUDA-8.0.44-GCCcore-5.4.0/lib64:$LD_LIBRARY_PATH
 
 
-BASE=/home/lgpu0237/IR2/results/exp_dropout
+BASE=~/IR2/results/exp_dropout
 mkdir -p $BASE
-python2 /home/lgpu0237/IR2/main.py --n_heads 1 --dropout_p_point 0.1 --result_path $BASE
+python2 ~/IR2/main.py --n_heads 1 --dropout_p_point 0.1 --result_path $BASE
