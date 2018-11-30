@@ -261,4 +261,4 @@ class Model(nn.Module):
         if self.coverage:
             cost_c = T.mean(T.sum(T.min(att_dists, acc_att), 2))
 
-        return y_pred, [cost, cost_c, cost_p_point, cost_w_prior_point]
+        return y_pred, [cost, cost_c, cost_p_point, cost_w_prior_point], p_points.cpu().detach().view(1,-1).mean().numpy()

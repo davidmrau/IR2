@@ -163,7 +163,7 @@ def init_modules():
     consts["beam_size"] = cfg.BEAM_SIZE
 
     consts["max_epoch"] = 10 if options["is_debugging"] else 30
-    consts["print_time"] = 80
+    consts["print_time"] = 70
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
@@ -555,6 +555,8 @@ def predict(model, modules, consts, options):
 def run():
 
     all_losses = []
+    p_points = []
+    continuing = False
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
@@ -593,8 +595,9 @@ def run():
                 opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH))))[0]
             print "loading existed model:", opt.model_name
             continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
-            model, optimizer, all_losses, av_batch_losses = load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
+            model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
             if continue_training:
+                continuing = True
                 print('Continue training model from step {}'.format(continue_step))
         if training_model:
             print "start training model "
@@ -607,16 +610,16 @@ def run():
             for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                if not continue_training:
-                    av_batch_losses = np.zeros(5)
-
+                if not continuing:
+                    av_batch_losses = np.zeros(5) 
+                    av_batch_p_points = np.zeros(1)
                 partial_num_files = 0
                 epoch_start = time.time()
                 partial_start = time.time()
                 # shuffle the trainset
                 batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
                 used_batch = 0.
-
+                 
                 for idx_batch in xrange(num_batches):
                     if continue_training and steps <= continue_step:
                         used_batch += 1
@@ -628,6 +631,8 @@ def run():
                             num_partial += 1
 
                         continue
+                    else:
+                        continuing = False
 
                     train_idx = batch_list[idx_batch]
                     batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
@@ -646,7 +651,7 @@ def run():
                         tf = teacher_forcing_ratio(steps, options["tf_offset_decay"])
                     else:
                         tf = True
-                    y_pred, losses = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
+                    y_pred, losses, p_point = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
@@ -663,6 +668,7 @@ def run():
 
                     # append total loss to losses
                     losses = np.append(total_loss.item(), losses)
+
                     # transform tensors to floats
                     losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
 
@@ -673,39 +679,42 @@ def run():
                     # add current losses to av_batch_losses
 
                     av_batch_losses = np.add(av_batch_losses, losses)
+                    av_batch_p_points = np.add(av_batch_p_points, p_point)
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
                     if partial_num_files % print_size == 0 and idx_batch < num_batches:
                         print("Step: {}").format(steps)
 
                         print idx_batch + 1, "/" , num_batches, "batches have been processed,",
-                        print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
+                        print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch, *av_batch_losses/used_batch))
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
                         if not options["is_debugging"]:
                             print "save model... ",
-                            save_model(cfg.cc.MODEL_PATH+ "/model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses)
+                            save_model(cfg.cc.MODEL_PATH+ "model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
                             all_losses.append(av_batch_losses/used_batch)
+                            p_points.append(av_batch_p_points/used_batch)
                             print "finished"
                         num_partial += 1
                     init_seeds(steps)
                     steps += 1
 
-                print("in this epoch:")
-                print("av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(*av_batch_losses/used_batch))
-                print "time:", time.time() - epoch_start
-                try:
+                if not continuing:
+                    print("in this epoch:")
+                    print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch,*av_batch_losses/used_batch))
+                    print "time:", time.time() - epoch_start
+            
                     print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
-                except:
-                    pass
 
-                if not options["is_debugging"]:
-                    print "save model... ",
-                    save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses)
-                    print "finished"
+                    if not options["is_debugging"]:
+                        print "save model... ",
+                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+                        save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
+                        print "finished"
 
             print "save final model... ",
-            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses)
+            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
+            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
             print "finished"
         else:
             print "skip training model"

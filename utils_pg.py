@@ -61,11 +61,13 @@ def rebuild_dir(path):
             pass
     os.mkdir(path)
 
-def save_model(f, model, optimizer, all_losses, av_batch_losses):
+def save_model(f, model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points):
     torch.save({"model_state_dict" : model.state_dict(),
             "optimizer_state_dict" : optimizer.state_dict(),
             "av_losses": all_losses,
-            "av_batch_losses": av_batch_losses},
+            "av_batch_losses": av_batch_losses,
+            "p_points" : p_points,
+            "av_batch_p_points": av_batch_p_points},
             f)
 
 def load_model(f, model, optimizer):
@@ -74,7 +76,9 @@ def load_model(f, model, optimizer):
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     all_losses = checkpoint["av_losses"]
     av_batch_losses = checkpoint["av_batch_losses"]
-    return model, optimizer, all_losses, av_batch_losses
+    p_points = checkpoint['p_points']
+    av_batch_p_points = checkpoint['av_batch_p_points']
+    return model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points
 
 def sort_samples(x, len_x, mask_x, y, len_y, \
                  mask_y, oys, x_ext, y_ext, oovs):
