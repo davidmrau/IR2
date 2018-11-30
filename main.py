@@ -163,7 +163,7 @@ def init_modules():
     consts["beam_size"] = cfg.BEAM_SIZE
 
     consts["max_epoch"] = 10 if options["is_debugging"] else 30
-    consts["print_time"] = 10
+    consts["print_time"] = 80
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
