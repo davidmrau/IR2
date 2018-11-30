@@ -25,6 +25,10 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
+
+parser.add_argument('--debug', help='Flag whether running in debug mode', action='store_true')
+
+parser.add_argument('--predict', help='Flag whether to predict or to train', action='store_true')
 parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
 parser.add_argument('--batch_size', help='Batch size for training', default=4, type=int)
 parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
@@ -65,7 +69,7 @@ create_folder(opt.result_path+'/summary')
 
 
 def print_basic_info(modules, consts, options):
-    if options["is_debugging"]:
+    if opt.debug:
         print "\nWARNING: IN DEBUGGING MODE\n"
     if options["copy"]:
         print "USE COPY MECHANISM"
@@ -97,11 +101,7 @@ def init_modules():
     init_seeds()
 
     options = {}
-
-    options["is_debugging"] = False
-    options["is_predicting"] = False
-    options["model_selection"] = False # When options["is_predicting"] = True, true means use validation set for tuning, false is real testing.
-
+    options["is_predicting"] = opt.predict
     options["use_p_point_loss"] = opt.use_p_point_loss
     options["use_w_prior_point_loss"] = opt.use_w_prior_point_loss
     options["tf_offset_decay"] = opt.tf_offset
@@ -121,7 +121,7 @@ def init_modules():
     assert TRAINING_DATASET_CLS.IS_UNICODE == TESTING_DATASET_CLS.IS_UNICODE
     options["is_unicode"] = TRAINING_DATASET_CLS.IS_UNICODE # True Chinese dataet
     options["has_y"] = TRAINING_DATASET_CLS.HAS_Y
-
+    options["is_debugging"] = opt.debug
     options["has_learnable_w2v"] = True
     options["omit_eos"] = False # omit <eos> and continuously decode until length of sentence reaches MAX_LEN_PREDICT (for DUC testing data)
     options["prediction_bytes_limitation"] = False if TESTING_DATASET_CLS.MAX_BYTE_PREDICT == None else True
@@ -134,7 +134,6 @@ def init_modules():
 
     consts["p_point_scalar"] = opt.p_point_scalar
     consts["w_prior_point_scalar"] = opt.w_prior_point_scalar
-
     consts["norm_clip"] = cfg.NORM_CLIP
     consts["dim_x"] = cfg.DIM_X
     consts["dim_y"] = cfg.DIM_Y
@@ -147,8 +146,8 @@ def init_modules():
     consts["n_heads"] = cfg.N_HEADS
     consts["dropout_p_point"] = opt.dropout_p_point
 
-    consts["batch_size"] = 5 if options["is_debugging"] else TRAINING_DATASET_CLS.BATCH_SIZE
-    if options["is_debugging"]:
+    consts["batch_size"] = 5 if opt.debug else TRAINING_DATASET_CLS.BATCH_SIZE
+    if opt.debug:
         consts["testing_batch_size"] = 1 if options["beam_decoding"] else 2
     else:
         #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE
@@ -162,7 +161,7 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 10 if options["is_debugging"] else 30
+    consts["max_epoch"] = 10 if opt.debug else 30
     consts["print_time"] = 70
     consts["save_epoch"] = 1
 
@@ -496,7 +495,7 @@ def predict(model, modules, consts, options):
     rebuild_dir(cfg.cc.SUMM_PATH)
 
     print "loading test set..."
-    if options["model_selection"]:
+    if opt.debug:
         xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
     else:
         xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
@@ -560,21 +559,12 @@ def run():
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
-    if options["is_predicting"]:
-        need_load_model = True
-        training_model = False
-        predict_model = True
-    else:
-        need_load_model = False
-        training_model = True
-        predict_model = False
-
     print_basic_info(modules, consts, options)
 
-    if training_model:
+    if not opt.predict:
         print "loading train set..."
-        if options["is_debugging"]:
-            xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
+        if opt.debug:
+            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train_small.pkl", "r"))
         else:
             xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r"))
         batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
@@ -590,16 +580,16 @@ def run():
 
         existing_epoch = 0
         continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
-        if continue_training or options['is_predicting']:
+        if continue_training or opt.predict:
             if opt.model_name == '':
-                opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH))))[0]
+                opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
             print "loading existed model:", opt.model_name
             continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
             model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
-            if continue_training:
+            if continue_training and not opt.predict:
                 continuing = True
                 print('Continue training model from step {}'.format(continue_step))
-        if training_model:
+        if not opt.predict:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
             steps = 0
@@ -689,7 +679,7 @@ def run():
                         print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch, *av_batch_losses/used_batch))
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
-                        if not options["is_debugging"]:
+                        if not opt.debug:
                             print "save model... ",
                             save_model(cfg.cc.MODEL_PATH+ "model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
                             all_losses.append(av_batch_losses/used_batch)
@@ -706,7 +696,7 @@ def run():
             
                     print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
 
-                    if not options["is_debugging"]:
+                    if not opt.debug:
                         print "save model... ",
                         pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
                         save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
@@ -719,7 +709,7 @@ def run():
         else:
             print "skip training model"
 
-        if predict_model:
+        if opt.predict:
             predict(model, modules, consts, options)
     print "Finished, time:", time.time() - running_start
 
