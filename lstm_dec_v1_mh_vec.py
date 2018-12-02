@@ -53,25 +53,25 @@ class LSTMAttentionDecoder(nn.Module):
 
 
     def forward(self, y_emb, context, init_state, x_mask, y_mask, xid=None, init_coverage=None):
-        def _get_word_atten(pctx, h1, x_mask, acc_att=None): #acc_att: B * len(B)
+        def _get_word_atten(pctx, h1, x_mask, acc_att=None):
+            # Score function
             if acc_att is not None:
                 h = F.linear(h1, self.W_comb_att) + F.linear(T.transpose(acc_att, 0, 1).unsqueeze(2), self.W_coverage) # len(x) * B * ?
             else:
                 h = F.linear(h1, self.W_comb_att)
             unreg_att = T.tanh(pctx + h) * x_mask
-            # len(x), B, n_heads, H
+            # Start multihead, chunk tanh output into n heads shape [length, batch, n_heads, hidden]
             unreg_att = torch.stack(torch.chunk(unreg_att, self.n_heads, -1), -2)
-            # len(x), B, n_heads
 
+            # Batch dot product: each head has own U_att vector. 
+            # the einsum does a torch.bmm over last 2 dimensions n_heads, hidden.
             unreg_att = torch.einsum('ijkl,kl->ijk', [unreg_att, self.U_att])
-            # if torch.isnan(unreg_att).any():
-            #     assert False
 
+            # Masked Softmax
             word_atten = T.exp(unreg_att - T.max(unreg_att, 0, keepdim = True)[0]) * x_mask
             sum_word_atten = T.sum(word_atten, 0, keepdim = True)
             word_atten =  word_atten / (sum_word_atten + 1e-6)
-            # if torch.isnan(word_atten).any():
-            #     assert False
+
             return word_atten
 
         def recurrence(x, y_mask, hidden, pctx, context, x_mask, acc_att=None):
