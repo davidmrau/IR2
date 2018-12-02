@@ -22,6 +22,7 @@ class LSTMAttentionDecoder(nn.Module):
         self.lstm_1 = nn.LSTMCell(self.input_size, self.hidden_size)
 
         self.W_att_concat = nn.Linear(self.ctx_size, self.ctx_size, bias=False)
+        self.att_norm = nn.LayerNorm(self.ctx_size)
         if self.ctx_size % self.n_heads != 0:
             raise RuntimeError("ctx_size should be a multiple of n_heads.")
 
@@ -43,6 +44,8 @@ class LSTMAttentionDecoder(nn.Module):
         init_lstm_weight(self.lstm_1)
         init_ortho_weight(self.Wc_att)
         init_bias(self.b_att)
+        init_ortho_weight(self.Wv_att)
+        init_bias(self.bv_att)
         init_ortho_weight(self.W_comb_att)
         init_ortho_weight(self.U_att)
         if self.coverage:
@@ -61,10 +64,14 @@ class LSTMAttentionDecoder(nn.Module):
             # len(x), B, n_heads
 
             unreg_att = torch.einsum('ijkl,kl->ijk', [unreg_att, self.U_att])
+            # if torch.isnan(unreg_att).any():
+            #     assert False
 
             word_atten = T.exp(unreg_att - T.max(unreg_att, 0, keepdim = True)[0]) * x_mask
             sum_word_atten = T.sum(word_atten, 0, keepdim = True)
-            word_atten =  word_atten / sum_word_atten
+            word_atten =  word_atten / (sum_word_atten + 1e-6)
+            # if torch.isnan(word_atten).any():
+            #     assert False
             return word_atten
 
         def recurrence(x, y_mask, hidden, pctx, context, x_mask, acc_att=None):
@@ -81,12 +88,15 @@ class LSTMAttentionDecoder(nn.Module):
             else:
                 word_atten = _get_word_atten(pctx, s, x_mask)
 
-            # attention * values = context vectors, shape [b, 4, h]
+            # attention * values = context vectors, shape [b, n_heads, h]
             atted_ctx = T.sum(word_atten.unsqueeze(-1) * context, 0)
-            # concat values -> shape [b, h*4]
+            # concat values -> shape [b, h*n_heads]
             atted_ctx = atted_ctx.view(atted_ctx.shape[0], -1)
             # linear
             atted_ctx = self.W_att_concat(atted_ctx)
+            # Layer norm
+            atted_ctx = self.att_norm(atted_ctx)
+
 
             word_atten = word_atten[:,:,0]
             word_atten_ = T.transpose(word_atten.view(x_mask.size(0), -1), 0, 1)
@@ -114,7 +124,7 @@ class LSTMAttentionDecoder(nn.Module):
                 Cs += [acc_att]
                 hidden, s, att, att_dist, acc_att = recurrence(x[i], y_mask[i], hidden, pctx, pv, x_mask, acc_att)
             else:
-                hidden, s, att, att_dist = recurrence(x[i], y_mask[i], hidden, pctx,context, x_mask)
+                hidden, s, att, att_dist = recurrence(x[i], y_mask[i], hidden, pctx, pv, x_mask)
             hs += [hidden[0]]
             cs += [hidden[1]]
             ss += [s]
