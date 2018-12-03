@@ -9,7 +9,6 @@ from torch.autograd import Variable
 
 from utils_pg import *
 from gru_dec import *
-from lstm_dec_v1_mh_vec import *
 from word_prob_layer import *
 import random
 
@@ -59,7 +58,15 @@ class Model(nn.Module):
             self.decoder = GRUAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
         else:
             self.encoder = nn.LSTM(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
-            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting)
+            if self.n_heads > 1:
+                print "using multihead decoder"
+                from lstm_dec_v1_mh_vec import LSTMAttentionDecoder
+                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting)
+            else:
+                print "using single head decoder"
+                from lstm_dec_v1 import LSTMAttentionDecoder
+                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
+
 
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
         self.word_prob = WordProbLayer(self.hidden_size, self.ctx_size, self.dim_y, self.dict_size, self.device, self.copy, self.coverage)
