@@ -40,7 +40,7 @@ class LSTMAttentionDecoder(nn.Module):
         #if self.coverage:
         #    init_ortho_weight(self.W_coverage)
 
-    def add_cov_weights(self):
+    def add_cov_weight(self):
         self.W_coverage = nn.Parameter(torch.Tensor(self.ctx_size, 1))
         init_ortho_weight(self.W_coverage)
 
