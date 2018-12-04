@@ -35,10 +35,14 @@ class LSTMAttentionDecoder(nn.Module):
         self.W_comb_att = nn.Parameter(torch.Tensor(self.ctx_size, 2*self.hidden_size))
         self.U_att = nn.Parameter(torch.Tensor(self.n_heads, self.ctx_size // self.n_heads))
 
-        if self.coverage:
-            self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
+       # if self.coverage:
+       #     self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
 
         self.init_weights()
+    
+    def add_cov_weight(self):
+        self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
+        init_ortho_weight(self.W_coverage)
 
     def init_weights(self):
         init_lstm_weight(self.lstm_1)
@@ -48,8 +52,8 @@ class LSTMAttentionDecoder(nn.Module):
         init_bias(self.bv_att)
         init_ortho_weight(self.W_comb_att)
         init_ortho_weight(self.U_att)
-        if self.coverage:
-            init_ortho_weight(self.W_coverage)
+        #if self.coverage:
+        #    init_ortho_weight(self.W_coverage)
 
 
     def forward(self, y_emb, context, init_state, x_mask, y_mask, xid=None, init_coverage=None):

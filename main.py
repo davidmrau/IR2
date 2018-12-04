@@ -30,7 +30,7 @@ parser.add_argument('--debug', help='Flag whether running in debug mode', action
 
 parser.add_argument('--predict', help='Flag whether to predict or to train', action='store_true')
 parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
-parser.add_argument('--batch_size', help='Batch size for training', default=4, type=int)
+parser.add_argument('--batch_size', help='Batch size for training', default=16, type=int)
 parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
 
 parser.add_argument('--dropout_p_point', help='Chance of dropping out p_point', default=0.0, type=float)
@@ -325,7 +325,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
         if options["copy"] and options["coverage"]:
             y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, tile_x, max_ext_len, acc_att)
         elif options["copy"]:
-            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, tile_x, max_ext_len)
+            y_pred, dec_state, p_point = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
         elif options["coverage"]:
             y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, acc_att=acc_att)
         else:
@@ -586,6 +586,10 @@ def run():
             print "loading existed model:", opt.model_name
             continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
             model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
+            if options['coverage']:
+                model.decoder.add_cov_weight()
+                if options['cuda']:
+                    model.cuda()
             if continue_training and not opt.predict:
                 continuing = True
                 print('Continue training model from step {}'.format(continue_step))
