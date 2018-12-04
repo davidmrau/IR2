@@ -8,7 +8,7 @@ import math
 from utils_pg import *
 
 class LSTMAttentionDecoder(nn.Module):
-    def __init__(self, input_size, hidden_size, ctx_size, device, copy, coverage, is_predicting):
+    def __init__(self, input_size, hidden_size, ctx_size, device, copy, coverage, is_predicting, continue_training):
         super(LSTMAttentionDecoder, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -17,6 +17,7 @@ class LSTMAttentionDecoder(nn.Module):
         self.device = device
         self.copy = copy
         self.coverage = coverage 
+        self.continue_training = continue_training
         
         self.lstm_1 = nn.LSTMCell(self.input_size, self.hidden_size)
 
@@ -26,8 +27,8 @@ class LSTMAttentionDecoder(nn.Module):
         self.W_comb_att = nn.Parameter(torch.Tensor(self.ctx_size, 2*self.hidden_size))
         self.U_att = nn.Parameter(torch.Tensor(1, self.ctx_size))
 
-        #if self.coverage:
-        #    self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
+        if self.coverage and not self.continue_training:
+            self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
 
         self.init_weights()
 
@@ -37,8 +38,8 @@ class LSTMAttentionDecoder(nn.Module):
         init_bias(self.b_att)
         init_ortho_weight(self.W_comb_att)
         init_ortho_weight(self.U_att)
-        #if self.coverage:
-        #    init_ortho_weight(self.W_coverage)
+        if self.coverage and not self.continue_training:
+            init_ortho_weight(self.W_coverage)
 
     def add_cov_weight(self):
         self.W_coverage = nn.Parameter(torch.Tensor(self.ctx_size, 1))

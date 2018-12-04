@@ -41,6 +41,7 @@ class Model(nn.Module):
         self.p_point_scalar = consts["p_point_scalar"]
         self.w_prior_point_scalar = consts["w_prior_point_scalar"]
         self.dropout_p_point = consts["dropout_p_point"]
+        self.continue_training = options['continue_training']
 
         self.dim_x = consts["dim_x"]
         self.dim_y = consts["dim_y"]
@@ -61,11 +62,11 @@ class Model(nn.Module):
             if self.n_heads > 1:
                 print "using multihead decoder"
                 from lstm_dec_v1_mh_vec import LSTMAttentionDecoder
-                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting)
+                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting, self.continue_training)
             else:
                 print "using single head decoder"
                 from lstm_dec_v1 import LSTMAttentionDecoder
-                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
+                self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting, self.continue_training)
 
 
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
@@ -247,7 +248,6 @@ class Model(nn.Module):
             except:
                 print('Calculating the cost using the copy mechanism failed.')
                 print('y_pred shape: ', y_pred.shape, ', y_ext shape: ', y_ext.shape, ', mask_y shape: ', mask_y.shape)
-
             if self.use_p_point_loss:
                 cost_p_point = self.p_point_scalar * torch.sum(p_points.squeeze().mean(0))
             elif self.use_w_prior_point_loss:

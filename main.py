@@ -572,6 +572,9 @@ def run():
 
     running_start = time.time()
     if True: #TODO: refactor
+
+        continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
+        options['continue_training'] = continue_training
         print "compiling model ..."
         model = Model(modules, consts, options)
         if options["cuda"]:
@@ -579,7 +582,6 @@ def run():
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
 
         existing_epoch = 0
-        continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
         if continue_training or opt.predict:
             if opt.model_name == '':
                 opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
