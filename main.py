@@ -40,6 +40,7 @@ parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=
 parser.add_argument('--use_p_point_loss', help='use p_point to the loss ', action='store_true')
 
 parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', action='store_true')
+parser.add_argument('--retrain', help='set flag whether retraining ', action='store_true')
 parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
 
 
@@ -161,7 +162,7 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 10 if opt.debug else 30
+    consts["max_epoch"] = 10 if opt.debug else 13
     consts["print_time"] = 70
     consts["save_epoch"] = 1
 
@@ -592,6 +593,7 @@ def run():
                 model.decoder.add_cov_weight()
                 if options['cuda']:
                     model.cuda()
+            print(model)
             if continue_training and not opt.predict:
                 continuing = True
                 print('Continue training model from step {}'.format(continue_step))
@@ -606,7 +608,7 @@ def run():
             for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                if not continuing:
+                if not continuing or opt.retrain:
                     av_batch_losses = np.zeros(5) 
                     av_batch_p_points = np.zeros(1)
                 partial_num_files = 0
@@ -651,7 +653,7 @@ def run():
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
-                                   batch.max_ext_len, tf)
+                                   batch.max_ext_len)
                     total_loss = 0
                     # TODO: implement averge batch costs
                     for loss_ in losses:

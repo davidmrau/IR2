@@ -42,8 +42,12 @@ class LSTMAttentionDecoder(nn.Module):
             init_ortho_weight(self.W_coverage)
 
     def add_cov_weight(self):
-        self.W_coverage = nn.Parameter(torch.Tensor(self.ctx_size, 1))
-        init_ortho_weight(self.W_coverage)
+        try:
+            if self.W_coverage == None:
+                pass
+        except:
+            self.W_coverage= nn.Parameter(torch.Tensor(self.ctx_size, 1))
+            init_ortho_weight(self.W_coverage)
 
     def forward(self, y_emb, context, init_state, x_mask, y_mask, xid=None, init_coverage=None):
         def _get_word_atten(pctx, h1, x_mask, acc_att=None): #acc_att: B * len(B)
