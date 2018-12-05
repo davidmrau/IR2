@@ -20,63 +20,13 @@ import data as datar
 from model import *
 from utils_pg import *
 from configs import *
-import re
-import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--colab', help='Flag whether running on colab', action='store_true')
-
-parser.add_argument('--debug', help='Flag whether running in debug mode', action='store_true')
-
-parser.add_argument('--predict', help='Flag whether to predict or to train', action='store_true')
-parser.add_argument('--tf_schedule', help='using Teacher forcing schedule', action='store_true')
-parser.add_argument('--batch_size', help='Batch size for training', default=16, type=int)
-parser.add_argument('--tf_offset', help='offset for teacher forcing scheduler', default=350000, type=int)
-
-parser.add_argument('--dropout_p_point', help='Chance of dropping out p_point', default=0.0, type=float)
-
-
-parser.add_argument('--p_point_scalar', help='scalar for p_point loss', default=1.0, type=float)
-parser.add_argument('--use_p_point_loss', help='use p_point to the loss ', action='store_true')
-
-parser.add_argument('--use_w_prior_point_loss', help='use w prior point loss ', action='store_true')
-parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point loss', default=1.0, type=float)
-
-
-parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
-parser.add_argument('--model_name', help='model file name that should be continued training', default='', type=str)
-parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
-parser.add_argument('--output_dir', help='Where to save the summaries/ground truth', default='', type=str)
-opt = parser.parse_args()
-
-cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
-
-cfg.cc.BEAM_SUMM_PATH = opt.output_dir + "/beam_summary/"
-cfg.cc.BEAM_GT_PATH = opt.output_dir + "/beam_ground_truth/"
-cfg.cc.GROUND_TRUTH_PATH = opt.output_dir + "/ground_truth/"
-cfg.cc.SUMM_PATH = opt.output_dir + "/summary/"
-cfg.cc.TMP_PATH = opt.output_dir  + "/tmp/"
-
-TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
+cfg = DeepmindConfigs()
+TRAINING_DATASET_CLS = DeepmindTraining
 TESTING_DATASET_CLS = DeepmindTesting
 
-
-def create_folder(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-create_folder(opt.result_path)
-create_folder(opt.result_path+'/tmp')
-create_folder(opt.result_path+'/model')
-create_folder(opt.result_path+'/beam_summary')
-create_folder(opt.result_path+'/beam_ground_truth')
-create_folder(opt.result_path+'/ground_truth')
-create_folder(opt.result_path+'/summary')
-
-
-
 def print_basic_info(modules, consts, options):
-    if opt.debug:
+    if options["is_debugging"]:
         print "\nWARNING: IN DEBUGGING MODE\n"
     if options["copy"]:
         print "USE COPY MECHANISM"
@@ -90,11 +40,6 @@ def print_basic_info(modules, consts, options):
         print "USE LEARNABLE W2V EMBEDDING"
     if options["is_bidirectional"]:
         print "USE BI-DIRECTIONAL RNN"
-
-    if options["use_p_point_loss"]:
-        print "USE P_POINT LOSS"
-
-
     if options["omit_eos"]:
         print "<eos> IS OMITTED IN TESTING DATA"
     if options["prediction_bytes_limitation"]:
@@ -104,18 +49,18 @@ def print_basic_info(modules, consts, options):
         print k + ":", consts[k]
 
 def init_modules():
-
+    
     init_seeds()
 
     options = {}
-    options["is_predicting"] = opt.predict
-    options["use_p_point_loss"] = opt.use_p_point_loss
-    options["use_w_prior_point_loss"] = opt.use_w_prior_point_loss
-    options["tf_offset_decay"] = opt.tf_offset
+
+    options["is_debugging"] = False
+    options["is_predicting"] = False
+    options["model_selection"] = False # When options["is_predicting"] = True, true means use validation set for tuning, false is real testing.
 
     options["cuda"] = cfg.CUDA and torch.cuda.is_available()
     options["device"] = torch.device("cuda" if  options["cuda"] else "cpu")
-    print('Running', options["device"])
+    
     #in config.py
     options["cell"] = cfg.CELL
     options["copy"] = cfg.COPY
@@ -124,11 +69,11 @@ def init_modules():
     options["avg_nll"] = cfg.AVG_NLL
 
     options["beam_decoding"] = cfg.BEAM_SEARCH # False for greedy decoding
-
+    
     assert TRAINING_DATASET_CLS.IS_UNICODE == TESTING_DATASET_CLS.IS_UNICODE
     options["is_unicode"] = TRAINING_DATASET_CLS.IS_UNICODE # True Chinese dataet
     options["has_y"] = TRAINING_DATASET_CLS.HAS_Y
-    options["is_debugging"] = opt.debug
+    
     options["has_learnable_w2v"] = True
     options["omit_eos"] = False # omit <eos> and continuously decode until length of sentence reaches MAX_LEN_PREDICT (for DUC testing data)
     options["prediction_bytes_limitation"] = False if TESTING_DATASET_CLS.MAX_BYTE_PREDICT == None else True
@@ -136,11 +81,9 @@ def init_modules():
     assert options["is_unicode"] == False
 
     consts = {}
-
+    
     consts["idx_gpu"] = cudaid
 
-    consts["p_point_scalar"] = opt.p_point_scalar
-    consts["w_prior_point_scalar"] = opt.w_prior_point_scalar
     consts["norm_clip"] = cfg.NORM_CLIP
     consts["dim_x"] = cfg.DIM_X
     consts["dim_y"] = cfg.DIM_Y
@@ -150,14 +93,11 @@ def init_modules():
     consts["num_y"] = cfg.NUM_Y
     consts["hidden_size"] = cfg.HIDDEN_SIZE
 
-    consts["n_heads"] = cfg.N_HEADS
-    consts["dropout_p_point"] = opt.dropout_p_point
-
-    consts["batch_size"] = 5 if opt.debug else TRAINING_DATASET_CLS.BATCH_SIZE
-    if opt.debug:
+    consts["batch_size"] = 5 if options["is_debugging"] else TRAINING_DATASET_CLS.BATCH_SIZE
+    if options["is_debugging"]:
         consts["testing_batch_size"] = 1 if options["beam_decoding"] else 2
     else:
-        #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE
+        #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE 
         consts["testing_batch_size"] = TESTING_DATASET_CLS.BATCH_SIZE
 
     consts["min_len_predict"] = TESTING_DATASET_CLS.MIN_LEN_PREDICT
@@ -168,17 +108,16 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 10 if opt.debug else 30
-    consts["print_time"] = 70
+    consts["max_epoch"] = 150 if options["is_debugging"] else 30 
+    consts["print_time"] = 5
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
     assert consts["beam_size"] >= 1
 
     modules = {}
-
-    [_, dic, hfw, w2i, i2w, w2w] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "dic.pkl", "r"))
-    modules["priors"] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "prior.pkl", "rb"))
+    
+    [_, dic, hfw, w2i, i2w, w2w] = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "dic.pkl", "r")) 
     consts["dict_size"] = len(dic)
     modules["dic"] = dic
     modules["w2i"] = w2i
@@ -188,13 +127,6 @@ def init_modules():
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
 
     return modules, consts, options
-def teacher_forcing_ratio(steps, offset):
-    if steps < offset:
-        return False
-    else:
-        prob_tf =  100/(100 + np.exp(steps-offset/step_size))
-        return random.random() < prob_tf
-
 
 def greedy_decode(flist, batch, model, modules, consts, options):
     testing_batch_size = len(flist)
@@ -214,7 +146,7 @@ def greedy_decode(flist, batch, model, modules, consts, options):
         dec_state = (dec_state, dec_state)
     if options["coverage"]:
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
-
+     
     for step in xrange(consts["max_len_predict"]):
         if num_left == 0:
             break
@@ -258,14 +190,14 @@ def greedy_decode(flist, batch, model, modules, consts, options):
                 num_left -= 1
             else:
                 dec_result[idx_doc].append(str(idx_max))
-
-    # for task with bytes-length limitation
+    
+    # for task with bytes-length limitation 
     if options["prediction_bytes_limitation"]:
         for i in xrange(len(dec_result)):
             sample = dec_result[i]
             b = 0
             for j in xrange(len(sample)):
-                e = int(sample[j])
+                e = int(sample[j]) 
                 if e in modules["i2w"]:
                     word = modules["i2w"][e]
                 else:
@@ -273,7 +205,7 @@ def greedy_decode(flist, batch, model, modules, consts, options):
                 if j == 0:
                     b += len(word)
                 else:
-                    b += len(word) + 1
+                    b += len(word) + 1 
                 if b > consts["max_byte_predict"]:
                     sorted_samples[i] = sorted_samples[i][0 : j]
                     break
@@ -310,7 +242,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
         x, word_emb, dec_state, x_mask, y, len_y, ref_sents, max_ext_len, oovs = batch
     else:
         x, word_emb, dec_state, x_mask, y, len_y, ref_sents = batch
-
+    
     next_y = torch.LongTensor(-np.ones((1, num_live), dtype="int64")).to(options["device"])
     x = x.unsqueeze(1)
     word_emb = word_emb.unsqueeze(1)
@@ -318,10 +250,10 @@ def beam_decode(fname, batch, model, modules, consts, options):
     dec_state = dec_state.unsqueeze(0)
     if options["cell"] == "lstm":
         dec_state = (dec_state, dec_state)
-
+    
     if options["coverage"]:
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
-        last_acc_att = []
+        last_acc_att = [] 
 
     for step in xrange(consts["max_len_predict"]):
         tile_word_emb = word_emb.repeat(1, num_live, 1)
@@ -330,9 +262,9 @@ def beam_decode(fname, batch, model, modules, consts, options):
             tile_x = x.repeat(1, num_live)
 
         if options["copy"] and options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len, acc_att=acc_att)
+            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, tile_x, max_ext_len, acc_att)
         elif options["copy"]:
-            y_pred, dec_state, p_point = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
+            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, tile_x, max_ext_len)
         elif options["coverage"]:
             y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, acc_att=acc_att)
         else:
@@ -346,7 +278,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             dec_state = (dec_state[0].view(num_live, dec_state[0].shape[-1]), dec_state[1].view(num_live, dec_state[1].shape[-1]))
         else:
             dec_state = dec_state.view(num_live, dec_state.shape[-1])
-
+  
         cand_scores = last_scores + torch.log(y_pred) # larger is better
         cand_scores = cand_scores.flatten()
         idx_top_joint_scores = torch.topk(cand_scores, beam_size - num_dead)[1]
@@ -359,10 +291,10 @@ def beam_decode(fname, batch, model, modules, consts, options):
         traces_now = []
         scores_now = np.zeros((beam_size - num_dead))
         states_now = []
-        if options["coverage"]:
+        if options["coverage"]: 
             acc_att_now = []
             last_acc_att = []
-
+        
         for i, [j, k] in enumerate(zip(idx_last_traces, idx_word_now)):
             traces_now.append(last_traces[j] + [k])
             scores_now[i] = copy.copy(top_joint_scores[i])
@@ -414,8 +346,8 @@ def beam_decode(fname, batch, model, modules, consts, options):
         else:
             dec_state = torch.stack(last_states).view((num_live, dec_state.shape[-1]))
         if options["coverage"]:
-            acc_att = torch.stack(last_acc_att).view((num_live, acc_att.shape[-1]))
-
+            acc_att = torch.stack(last_acc_att).view((num_live, acc_att.shape[-1])) 
+            
         assert num_live + num_dead == beam_size
 
     if num_live > 0:
@@ -423,7 +355,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             samples.append([str(e.item()) for e in last_traces[i]])
             sample_scores[num_dead] = last_scores[i]
             num_dead += 1
-
+    
     #weight by length
     for i in xrange(len(sample_scores)):
         sent_len = float(len(samples[i]))
@@ -452,13 +384,13 @@ def beam_decode(fname, batch, model, modules, consts, options):
         sorted_samples = sorted_samples[0]
         num_samples = 1
 
-    # for task with bytes-length limitation
+    # for task with bytes-length limitation 
     if options["prediction_bytes_limitation"]:
         for i in xrange(len(sorted_samples)):
             sample = sorted_samples[i]
             b = 0
             for j in xrange(len(sample)):
-                e = int(sample[j])
+                e = int(sample[j]) 
                 if e in modules["i2w"]:
                     word = modules["i2w"][e]
                 else:
@@ -466,7 +398,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
                 if j == 0:
                     b += len(word)
                 else:
-                    b += len(word) + 1
+                    b += len(word) + 1 
                 if b > consts["max_byte_predict"]:
                     sorted_samples[i] = sorted_samples[i][0 : j]
                     break
@@ -479,14 +411,14 @@ def beam_decode(fname, batch, model, modules, consts, options):
             dec_words.append(modules["i2w"][e])
         else:
             dec_words.append(oovs[e - len(modules["i2w"])])
-
+    
     write_for_rouge(fname, ref_sents, dec_words, cfg)
 
     # beam search history for checking
     if not options["copy"]:
         oovs = None
     write_summ("".join((cfg.cc.BEAM_SUMM_PATH, fname)), sorted_samples, num_samples, options, modules["i2w"], oovs, sorted_scores)
-    write_summ("".join((cfg.cc.BEAM_GT_PATH, fname)), y_true, 1, options, modules["i2w"], oovs)
+    write_summ("".join((cfg.cc.BEAM_GT_PATH, fname)), y_true, 1, options, modules["i2w"], oovs) 
 
 
 def predict(model, modules, consts, options):
@@ -502,14 +434,14 @@ def predict(model, modules, consts, options):
     rebuild_dir(cfg.cc.SUMM_PATH)
 
     print "loading test set..."
-    if opt.debug:
-        xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
+    if options["model_selection"]:
+        xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r")) 
     else:
-        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r")) 
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
 
     print "num_files = ", num_files, ", num_batches = ", num_batches
-
+    
     running_start = time.time()
     partial_num = 0
     total_num = 0
@@ -518,13 +450,13 @@ def predict(model, modules, consts, options):
         test_idx = batch_list[idx_batch]
         batch_raw = [xy_list[xy_idx] for xy_idx in test_idx]
         batch = datar.get_data(batch_raw, modules, consts, options)
-
+        
         assert len(test_idx) == batch.x.shape[1] # local_batch_size
 
         x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
                                                              batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
-
+                    
         word_emb, dec_state = model.encode(torch.LongTensor(x).to(options["device"]),\
                                            torch.LongTensor(len_x).to(options["device"]),\
                                            torch.FloatTensor(x_mask).to(options["device"]))
@@ -558,174 +490,134 @@ def predict(model, modules, consts, options):
             partial_num = 0
     print si, total_num
 
-def run():
-
-    all_losses = []
-    p_points = []
-    continuing = False
+def run(existing_model_name = None):
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
+    if options["is_predicting"]:
+        need_load_model = True
+        training_model = False
+        predict_model = True
+    else:
+        need_load_model = False
+        training_model = True
+        predict_model = False
+
     print_basic_info(modules, consts, options)
 
-    if not opt.predict:
+    if training_model:
         print "loading train set..."
-        if opt.debug:
-            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train_small.pkl", "r"))
+        if options["is_debugging"]:
+            xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r")) 
         else:
-            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r"))
+            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r")) 
         batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
         print "num_files = ", num_files, ", num_batches = ", num_batches
 
     running_start = time.time()
     if True: #TODO: refactor
-
-        continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
-        options['continue_training'] = continue_training
-        print "compiling model ..."
+        print "compiling model ..." 
         model = Model(modules, consts, options)
         if options["cuda"]:
             model.cuda()
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
-
+        
+        model_name = "".join(["cnndm.s2s.", options["cell"]])
         existing_epoch = 0
-        if continue_training or opt.predict:
-            if opt.model_name == '':
-                opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
-            print "loading existed model:", opt.model_name
-            continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
-            model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
-            if options['coverage']:
-                model.decoder.add_cov_weight()
-                if options['cuda']:
-                    model.cuda()
-            if continue_training and not opt.predict:
-                continuing = True
-                print('Continue training model from step {}'.format(continue_step))
-        if not opt.predict:
+        if need_load_model:
+            if existing_model_name == None:
+                existing_model_name = "cnndm.s2s.gpu4.epoch7.1"
+            print "loading existed model:", existing_model_name
+            model, optimizer = load_model(cfg.cc.MODEL_PATH + existing_model_name, model, optimizer)
+
+        if training_model:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
-            steps = 0
-            print(model)
-            # cnndm.s2s.lstm.gpu0.epoch0.7
+
             last_total_error = float("inf")
             print "max epoch:", consts["max_epoch"]
             for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                if not continuing:
-                    av_batch_losses = np.zeros(5) 
-                    av_batch_p_points = np.zeros(1)
+                total_error = 0.0
+                error_c = 0.0
                 partial_num_files = 0
                 epoch_start = time.time()
                 partial_start = time.time()
                 # shuffle the trainset
                 batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
                 used_batch = 0.
-                 
                 for idx_batch in xrange(num_batches):
-                    if continue_training and steps <= continue_step:
-                        used_batch += 1
-                        init_seeds(steps)
-                        steps += 1
-                        partial_num_files += consts["batch_size"]
-                        if partial_num_files % print_size == 0 and idx_batch < num_batches:
-                            partial_num_files =0
-                            num_partial += 1
-
-                        continue
-                    else:
-                        continuing = False
-
                     train_idx = batch_list[idx_batch]
                     batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
                     if len(batch_raw) != consts["batch_size"]:
                         continue
                     local_batch_size = len(batch_raw)
                     batch = datar.get_data(batch_raw, modules, consts, options)
-
+                  
                     x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
                                                              batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
-
+                    
                     model.zero_grad()
-
-                    if opt.tf_schedule:
-                        tf = teacher_forcing_ratio(steps, options["tf_offset_decay"])
-                    else:
-                        tf = True
-                    y_pred, losses, p_point = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
+                    y_pred, cost, cost_c = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
                                    torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
                                    torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
                                    torch.LongTensor(y_ext).to(options["device"]), \
-                                   batch.max_ext_len, tf)
-                    total_loss = 0
-                    # TODO: implement averge batch costs
-                    for loss_ in losses:
-                        if loss_ is not None:
-                            total_loss += loss_
-
-                    total_loss.backward()
+                                   batch.max_ext_len)
+                    if cost_c is None:
+                        loss = cost
+                    else:
+                        loss = cost + cost_c
+                        cost_c = cost_c.item()
+                        error_c += cost_c
+                    
+                    loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
                     optimizer.step()
-
-                    # append total loss to losses
-                    losses = np.append(total_loss.item(), losses)
-
-                    # transform tensors to floats
-                    losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
-
-                   # with open(opt.result_path + '/result.log', "a") as log_file:
-                   #     log_file.write("epoch {}, step {}, total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}\n".format(epoch, steps,*losses))
-
-                    # if new batch reset
-                    # add current losses to av_batch_losses
-
-                    av_batch_losses = np.add(av_batch_losses, losses)
-                    av_batch_p_points = np.add(av_batch_p_points, p_point)
+                    
+                    cost = cost.item()
+                    total_error += cost
                     used_batch += 1
                     partial_num_files += consts["batch_size"]
-                    if partial_num_files % print_size == 0 and idx_batch < num_batches:
-                        print("Step: {}").format(steps)
-
-                        print idx_batch + 1, "/" , num_batches, "batches have been processed,",
-                        print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch, *av_batch_losses/used_batch))
+                    if partial_num_files / print_size == 1 and idx_batch < num_batches:
+                        print idx_batch + 1, "/" , num_batches, "batches have been processed,", 
+                        print "average cost until now:", "cost =", total_error / used_batch, ",", 
+                        print "cost_c =", error_c / used_batch, ",",
                         print "time:", time.time() - partial_start
                         partial_num_files = 0
-                        if not opt.debug:
+                        if not options["is_debugging"]:
                             print "save model... ",
-                            save_model(cfg.cc.MODEL_PATH+ "model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-                            all_losses.append(av_batch_losses/used_batch)
-                            p_points.append(av_batch_p_points/used_batch)
+                            save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
                             print "finished"
                         num_partial += 1
-                    init_seeds(steps)
-                    steps += 1
+                print "in this epoch, total average cost =", total_error / used_batch, ",", 
+                print "cost_c =", error_c / used_batch, ",",
+                print "time:", time.time() - epoch_start
 
-                if not continuing:
-                    print("in this epoch:")
-                    print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch,*av_batch_losses/used_batch))
-                    print "time:", time.time() - epoch_start
-            
-                    print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
-
-                    if not opt.debug:
+                print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
+                
+                if last_total_error > total_error or options["is_debugging"]:
+                    last_total_error = total_error
+                    if not options["is_debugging"]:
                         print "save model... ",
-                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
-                        save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
+                        save_model(cfg.cc.MODEL_PATH + model_name + ".gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
                         print "finished"
+                else:
+                    print "optimization finished"
+                    break
 
             print "save final model... ",
-            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+            save_model(cfg.cc.MODEL_PATH + model_name + ".final.gpu" + str(consts["idx_gpu"]) + ".epoch" + str(epoch / consts["save_epoch"] + existing_epoch) + "." + str(num_partial), model, optimizer)
             print "finished"
         else:
             print "skip training model"
 
-        if opt.predict:
+        if predict_model:
             predict(model, modules, consts, options)
     print "Finished, time:", time.time() - running_start
 
 if __name__ == "__main__":
     np.set_printoptions(threshold = np.inf)
-    run()
+    existing_model_name = sys.argv[1] if len(sys.argv) > 1 else None
+    run(existing_model_name)
