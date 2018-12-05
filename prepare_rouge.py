@@ -6,7 +6,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
+parser.add_argument('--result_path', help='path where the  results will be stored', default='result', type=str)
 opt = parser.parse_args()
 
 # config file for ROUGE
@@ -60,5 +60,5 @@ for file_id, fsumm in i2summ.items():
                     
 rouge_s += "\n</ROUGE-EVAL>"
 
-with open(ROUGE_PATH + "myROUGE_Config.xml", "w") as f_rouge:
+with open(ROUGE_PATH + "/myROUGE_Config.xml", "w") as f_rouge:
     f_rouge.write(rouge_s) 
