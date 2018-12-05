@@ -55,6 +55,7 @@ class WordProbLayer(nn.Module):
             p_gen_mask_set_to_one = (torch.rand_like(p_gen) < dropout_p_point).float()
             # NOTE: we get NaNs if we multiply p_gen_mask_set_to_one with 1
             p_gen = p_gen * (1 - p_gen_mask_set_to_one) + 0.99 * p_gen_mask_set_to_one
+            p_gen = torch.clamp(p_gen,0.0001, 0.9999)
             p_w = (p_gen * p_vocab).scatter_add(2, xids, (1 - p_gen) * att_dist)
             return p_w, 1-p_gen
         else:
