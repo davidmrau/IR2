@@ -323,7 +323,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             tile_x = x.repeat(1, num_live)
 
         if options["copy"] and options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, tile_x, max_ext_len, acc_att)
+            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len, acc_att=acc_att)
         elif options["copy"]:
             y_pred, dec_state, p_point = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
         elif options["coverage"]:

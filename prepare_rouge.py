@@ -2,13 +2,17 @@
 import sys
 import os
 from configs import * 
+import argparse
 
-cfg = DeepmindConfigs()
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
+opt = parser.parse_args()
 
 # config file for ROUGE
-ROUGE_PATH = cfg.cc.RESULT_PATH 
-SUMM_PATH = cfg.cc.SUMM_PATH
-MODEL_PATH = cfg.cc.GROUND_TRUTH_PATH
+ROUGE_PATH = opt.result_path
+SUMM_PATH = opt.result_path + '/beam_summary/'
+MODEL_PATH = opt.result_path + '/beam_ground_truth/'
 i2summ = {}
 summ2i = {}
 i2model = {}
