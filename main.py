@@ -45,11 +45,18 @@ parser.add_argument('--w_prior_point_scalar', help='scalar for w prior point los
 
 parser.add_argument('--result_path', help='path where the model and results will be stored', default='result', type=str)
 parser.add_argument('--model_name', help='model file name that should be continued training', default='', type=str)
-
 parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
+parser.add_argument('--output_dir', help='Where to save the summaries/ground truth', default='', type=str)
 opt = parser.parse_args()
 
 cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
+
+cfg.cc.BEAM_SUMM_PATH = opt.output_dir + "/beam_summary/"
+cfg.cc.BEAM_GT_PATH = opt.output_dir + "/beam_ground_truth/"
+cfg.cc.GROUND_TRUTH_PATH = opt.output_dir + "/ground_truth/"
+cfg.cc.SUMM_PATH = opt.output_dir + "/summary/"
+cfg.cc.TMP_PATH = opt.output_dir  + "/tmp/"
+
 TRAINING_DATASET_CLS = DeepmindTraining(opt.batch_size)
 TESTING_DATASET_CLS = DeepmindTesting
 
