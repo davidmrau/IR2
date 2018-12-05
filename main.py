@@ -635,6 +635,8 @@ def run():
                             partial_num_files =0
                             num_partial += 1
 
+                        if steps == continue_step:
+                            continuing = False
                         continue
                     else:
                         continuing = False
