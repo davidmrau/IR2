@@ -104,7 +104,7 @@ class Model(nn.Module):
             hcs, dec_status, atted_context = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y)
         
         if self.copy:
-            y_pred = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len)
+            y_pred, p_points = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len)
         else:
             y_pred = self.word_prob(dec_status, atted_context, y_emb)
 

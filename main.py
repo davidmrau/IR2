@@ -333,7 +333,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
         if options["copy"] and options["coverage"]:
             y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len, acc_att=acc_att)
         elif options["copy"]:
-            y_pred, dec_state, p_point = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
+            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
         elif options["coverage"]:
             y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, acc_att=acc_att)
         else:
@@ -504,9 +504,9 @@ def predict(model, modules, consts, options):
 
     print "loading test set..."
     if opt.debug:
-        xy_list = pickle.load(open(cfg.cc.VALIDATE_DATA_PATH + "pj1000.pkl", "r"))
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
     else:
-        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
     
     # Save order of batches for ngram overlap
