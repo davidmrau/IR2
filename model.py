@@ -14,8 +14,8 @@ from word_prob_layer import *
 
 class Model(nn.Module):
     def __init__(self, modules, consts, options):
-        super(Model, self).__init__()  
-        
+        super(Model, self).__init__()
+
         self.has_learnable_w2v = options["has_learnable_w2v"]
         self.is_predicting = options["is_predicting"]
         self.is_bidirectional = options["is_bidirectional"]
@@ -38,10 +38,10 @@ class Model(nn.Module):
         self.priors = self.priors.to(self.device)
         self.len_y = consts["len_y"]
         self.hidden_size = consts["hidden_size"]
-        self.dict_size = consts["dict_size"] 
-        self.pad_token_idx = consts["pad_token_idx"] 
+        self.dict_size = consts["dict_size"]
+        self.pad_token_idx = consts["pad_token_idx"]
         self.ctx_size = self.hidden_size * 2 if self.is_bidirectional else self.hidden_size
-
+        self.dropout_p_point = consts["dropout_p_point"]
         self.w_rawdata_emb = nn.Embedding(self.dict_size, self.dim_x, self.pad_token_idx)
         if self.cell == "gru":
             self.encoder = nn.GRU(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
@@ -49,7 +49,7 @@ class Model(nn.Module):
         else:
             self.encoder = nn.LSTM(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
             self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting, self.continue_training)
-            
+
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
         self.word_prob = WordProbLayer(self.hidden_size, self.ctx_size, self.dim_y, self.dict_size, self.device, self.copy, self.coverage)
 
@@ -57,12 +57,12 @@ class Model(nn.Module):
 
     def init_weights(self):
         init_uniform_weight(self.w_rawdata_emb.weight)
-        if self.cell == "gru": 
+        if self.cell == "gru":
             init_gru_weight(self.encoder)
         else:
             init_lstm_weight(self.encoder)
         init_linear_weight(self.get_dec_init_state)
-    
+
     def nll_loss(self, y_pred, y, y_mask, avg=True):
         cost = -T.log(T.gather(y_pred, 2, y.view(y.size(0), y.size(1), 1)))
         cost = cost.view(y.shape)
@@ -72,16 +72,16 @@ class Model(nn.Module):
         else:
             cost = T.sum(cost * y_mask, 0)
         cost = cost.view((y.size(1), -1))
-        return T.mean(cost) 
+        return T.mean(cost)
 
     def encode(self, x, len_x, mask_x):
         self.encoder.flatten_parameters()
         emb_x = self.w_rawdata_emb(x)
-        
+
         emb_x = torch.nn.utils.rnn.pack_padded_sequence(emb_x, len_x)
         hs, hn = self.encoder(emb_x, None)
         hs, _ = torch.nn.utils.rnn.pad_packed_sequence(hs)
-         
+
         dec_init_state = T.sum(hs * mask_x, 0) / T.sum(mask_x, 0)
         dec_init_state = T.tanh(self.get_dec_init_state(dec_init_state))
         return hs, dec_init_state
@@ -102,9 +102,9 @@ class Model(nn.Module):
             hcs, dec_status, atted_context, att_dist, C = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y, init_coverage=acc_att)
         else:
             hcs, dec_status, atted_context = self.decoder(y_emb, hs, dec_init_state, mask_x, mask_y)
-        
+
         if self.copy:
-            y_pred = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len)
+            y_pred = self.word_prob(dec_status, atted_context, y_emb, att_dist, xids, max_ext_len,dropout_p_point=self.dropout_p_point)
         else:
             y_pred = self.word_prob(dec_status, atted_context, y_emb)
 
@@ -114,7 +114,7 @@ class Model(nn.Module):
             return y_pred, hcs
 
     def forward(self, x, len_x, y, mask_x, mask_y, x_ext, y_ext, max_ext_len):
-        
+
         hs, dec_init_state = self.encode(x, len_x, mask_x)
 
         y_emb = self.w_rawdata_emb(y)
@@ -134,12 +134,12 @@ class Model(nn.Module):
             hcs, dec_status, atted_context, att_dist, C = self.decoder(y_shifted, hs, h0, mask_x, mask_y, init_coverage=acc_att)
         else:
             hcs, dec_status, atted_context = self.decoder(y_shifted, hs, h0, mask_x, mask_y)
-        
+
         if self.copy:
             y_pred, p_points = self.word_prob(dec_status, atted_context, y_shifted, att_dist, xids, max_ext_len)
         else:
             y_pred = self.word_prob(dec_status, atted_context, y_shifted)
-        
+
         cost_p_point = 0
         cost_c = 0
         cost_w_prior_point = 0
@@ -167,5 +167,3 @@ class Model(nn.Module):
             cost_c = T.mean(T.sum(T.min(att_dist, acc_att), 2))
 
         return y_pred, [cost, cost_c, cost_p_point, cost_w_prior_point], p_points.squeeze().mean(0).mean().cpu().detach().numpy()
-    
-
