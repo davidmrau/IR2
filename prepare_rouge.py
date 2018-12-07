@@ -11,8 +11,8 @@ opt = parser.parse_args()
 
 # config file for ROUGE
 ROUGE_PATH = opt.result_path
-SUMM_PATH = opt.result_path + '/beam_summary/'
-MODEL_PATH = opt.result_path + '/beam_ground_truth/'
+SUMM_PATH = opt.result_path + '/beam_ground_truth/'
+MODEL_PATH = opt.result_path + '/summary/'
 i2summ = {}
 summ2i = {}
 i2model = {}
