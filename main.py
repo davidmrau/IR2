@@ -510,7 +510,7 @@ def predict(model, modules, consts, options):
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
     
     # Save order of batches for ngram overlap
-    pickle.dump(list(batch_list), open(opt.output_dir + '/test_batch_order.pkl', 'wb'))
+    batches_sorted_idx = []
 
     print "num_files = ", num_files, ", num_batches = ", num_batches
 
@@ -525,9 +525,12 @@ def predict(model, modules, consts, options):
 
         assert len(test_idx) == batch.x.shape[1] # local_batch_size
 
-        x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
+        x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs, batch_sorted_idx = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
-                                                             batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
+                                                             batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words, 
+                                                             return_idx=True)
+        batches_sorted_idx.append(batch_sorted_idx)
+        
 
         word_emb, dec_state = model.encode(torch.LongTensor(x).to(options["device"]),\
                                            torch.LongTensor(len_x).to(options["device"]),\
@@ -560,6 +563,7 @@ def predict(model, modules, consts, options):
         if partial_num >= consts["testing_print_size"]:
             print total_num, "summs are generated"
             partial_num = 0
+    pickle.dump(batches_sorted_idx, open(opt.output_dir + '/test_batch_order.pkl', 'wb'))
     print si, total_num
 
 def run():
