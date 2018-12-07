@@ -1,7 +1,13 @@
+import nltk
 from nltk import tokenize
 import glob, sys, os, pickle
 import itertools
 import numpy as np
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
 """
 Usage:
