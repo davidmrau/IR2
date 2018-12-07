@@ -26,7 +26,7 @@ class Model(nn.Module):
         self.coverage = options["coverage"]
         self.avg_nll = options["avg_nll"]
         self.n_heads = consts['n_heads']
-        self.continue_training = options['continue_training']
+        self.retrain = options['retrain']
         self.use_p_point_loss = options['use_p_point_loss']
         self.use_w_prior_point_loss = options['use_w_prior_point_loss']
         self.dim_x = consts["dim_x"]
@@ -48,7 +48,7 @@ class Model(nn.Module):
             self.decoder = GRUAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.device, self.copy, self.coverage, self.is_predicting)
         else:
             self.encoder = nn.LSTM(self.dim_x, self.hidden_size, bidirectional=self.is_bidirectional)
-            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting, self.continue_training)
+            self.decoder = LSTMAttentionDecoder(self.dim_y, self.hidden_size, self.ctx_size, self.n_heads, self.device, self.copy, self.coverage, self.is_predicting, self.retrain)
             
         self.get_dec_init_state = nn.Linear(self.ctx_size, self.hidden_size)
         self.word_prob = WordProbLayer(self.hidden_size, self.ctx_size, self.dim_y, self.dict_size, self.device, self.copy, self.coverage)

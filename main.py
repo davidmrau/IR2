@@ -48,6 +48,7 @@ parser.add_argument('--result_path', help='path where the model and results will
 parser.add_argument('--model_name', help='model file name that should be continued training', default='', type=str)
 parser.add_argument('--n_heads', help='number of attention heads', default=4, type=int)
 parser.add_argument('--output_dir', help='Where to save the summaries/ground truth', default='', type=str)
+parser.add_argument('--model_folder', help='Where to look for models', default='', type=str)
 opt = parser.parse_args()
 
 cfg = DeepmindConfigs(opt.colab,opt.result_path,opt.n_heads)
@@ -75,6 +76,7 @@ create_folder(opt.result_path+'/ground_truth')
 create_folder(opt.result_path+'/summary')
 
 
+create_folder(opt.result_path+'/model_retrained')
 
 def print_basic_info(modules, consts, options):
     if opt.debug:
@@ -123,7 +125,7 @@ def init_modules():
     options["coverage"] = cfg.COVERAGE
     options["is_bidirectional"] = cfg.BI_RNN
     options["avg_nll"] = cfg.AVG_NLL
-
+    options['retrain']  = opt.retrain
     options["beam_decoding"] = cfg.BEAM_SEARCH # False for greedy decoding
 
     assert TRAINING_DATASET_CLS.IS_UNICODE == TESTING_DATASET_CLS.IS_UNICODE
@@ -169,8 +171,8 @@ def init_modules():
     consts["lr"] = cfg.LR
     consts["beam_size"] = cfg.BEAM_SIZE
 
-    consts["max_epoch"] = 10 if opt.debug else 13
-    consts["print_time"] = 70
+    consts["max_epoch"] = 14 if opt.debug else 13
+    consts["print_time"] = 150 if opt.retrain else 70
     consts["save_epoch"] = 1
 
     assert consts["dim_x"] == consts["dim_y"]
@@ -187,7 +189,10 @@ def init_modules():
     modules["lfw_emb"] = modules["w2i"][cfg.W_UNK]
     modules["eos_emb"] = modules["w2i"][cfg.W_EOS]
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
-
+    
+    cfg.cc.MODEL_PATH = opt.result_path + '/model_retrained/'
+    if opt.model_folder:
+        cfg.cc.MODEL_PATH = opt.model_folder
     return modules, consts, options
 def teacher_forcing_ratio(steps, offset):
     if steps < offset:
@@ -594,20 +599,30 @@ def run():
         model = Model(modules, consts, options)
         if options["cuda"]:
             model.cuda()
-        optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
 
+        optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
         existing_epoch = 0
         if continue_training or opt.predict:
             if opt.model_name == '':
                 opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
-            print "loading existed model:", opt.model_name
-            continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
+                print "loading existed model:", opt.model_name
+                continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
+            else:
+                continue_step = 0
             model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
+            if opt.retrain:
+                av_batch_losses = np.zeros(5)
+                av_batch_p_points = np.zeros(1)
+                all_losses = []
+                p_points = []
             if options['coverage']:
                 model.decoder.add_cov_weight()
                 if options['cuda']:
                     model.cuda()
             print(model)
+            if opt.retrain:
+                # update optimizer, because network contains now coverage weights if coverage is on
+                optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
             if continue_training and not opt.predict:
                 continuing = True
                 print('Continue training model from step {}'.format(continue_step))
@@ -622,7 +637,7 @@ def run():
             for epoch in xrange(0, consts["max_epoch"]):
                 print "epoch: ", epoch + existing_epoch
                 num_partial = 1
-                if not continuing or opt.retrain:
+                if not continuing:
                     av_batch_losses = np.zeros(5) 
                     av_batch_p_points = np.zeros(1)
                 partial_num_files = 0
@@ -722,13 +737,13 @@ def run():
 
                     if not opt.debug:
                         print "save model... ",
-                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+                        pickle.dump([all_losses, p_points], open(opt.model_path + '/losses_p_points.p', 'wb'))
                         save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
                         print "finished"
 
             print "save final model... ",
             save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+            pickle.dump([all_losses, p_points], open(opt.model_path + '/losses_p_points.p', 'wb'))
             print "finished"
         else:
             print "skip training model"
