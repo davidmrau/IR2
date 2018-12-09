@@ -610,11 +610,11 @@ def run():
             else:
                 continue_step = 0
             model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
-            if opt.retrain:
-                av_batch_losses = np.zeros(5)
-                av_batch_p_points = np.zeros(1)
-                all_losses = []
-                p_points = []
+        if opt.retrain:
+            av_batch_losses = np.zeros(5)
+            av_batch_p_points = np.zeros(1)
+            all_losses = []
+            p_points = []
             if options['coverage']:
                 model.decoder.add_cov_weight()
                 if options['cuda']:
