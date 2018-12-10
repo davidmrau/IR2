@@ -511,7 +511,7 @@ def predict(model, modules, consts, options):
     if opt.debug:
         xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
     else:
-        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
     
     # Save order of batches for ngram overlap
