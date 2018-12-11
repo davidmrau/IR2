@@ -600,14 +600,16 @@ def run():
 
         optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
         existing_epoch = 0
-        if continue_training or opt.predict:
+        if continue_training or opt.predict or opt.retrain:
             if opt.model_name == '':
                 opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
-                print "loading existed model:", opt.model_name
                 continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
+                name = cfg.cc.MODEL_PATH + opt.model_name
             else:
                 continue_step = 0
-            model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(cfg.cc.MODEL_PATH + opt.model_name, model, optimizer)
+                name = opt.model_name
+            print "loading existed model:", name
+            model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(name, model, optimizer)
         if opt.retrain:
             av_batch_losses = np.zeros(5)
             av_batch_p_points = np.zeros(1)
