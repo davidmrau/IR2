@@ -62,7 +62,7 @@ def main(folder, data_path):
     sent_overlaps = 0
     for i in xrange(len(sum_files)):
         with open(sum_files[i], 'r') as f:
-            summ = f.readlines()[0].split(' ', 1)[1].decode('utf-8')
+            summ = f.readlines()[-1].split(' ', 1)[1].decode('utf-8')
 
         source = data[order[i]][0][1].decode('utf-8')
 
