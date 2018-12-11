@@ -29,10 +29,10 @@ mkdir -p $OUTPUTDIR
 echo $OUTPUTDIR
 
 python2 ~/IR2/main.py --n_heads $3 --result_path $OUTPUTDIR --predict --model_name $MODELNAME --output_dir $OUTPUTDIR
-#python2 ~/IR2/prepare_rouge.py --result_path $OUTPUTDIR
+python2 ~/IR2/prepare_rouge.py --result_path $OUTPUTDIR
 
 
-python2 ~/IR2/ngram_overlap.py $OUTPUTDIR > $OUTPUTDIR/ngramoverlap
+python2 ~/IR2/ngram_overlap.py $OUTPUTDIR ~/deepmind/train_set/train.pkl > $OUTPUTDIR/ngramoverlap
 cat $OUTPUTDIR/ngramoverlap
 rm $OUTPUTDIR/generated.txt
 rm $OUTPUTDIR/targets.txt
