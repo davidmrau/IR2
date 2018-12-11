@@ -76,7 +76,6 @@ create_folder(opt.result_path+'/ground_truth')
 create_folder(opt.result_path+'/summary')
 
 
-create_folder(opt.result_path+'/model_retrained')
 
 def print_basic_info(modules, consts, options):
     if opt.debug:
@@ -190,7 +189,6 @@ def init_modules():
     modules["eos_emb"] = modules["w2i"][cfg.W_EOS]
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
     
-    cfg.cc.MODEL_PATH = opt.result_path + '/model_retrained/'
     if opt.model_folder:
         cfg.cc.MODEL_PATH = opt.model_folder
     return modules, consts, options
@@ -592,7 +590,7 @@ def run():
 
     running_start = time.time()
     if True: #TODO: refactor
-
+        print('model_path', cfg.cc.MODEL_PATH)
         continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
         options['continue_training'] = continue_training
         print "compiling model ..."
