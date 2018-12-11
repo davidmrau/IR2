@@ -32,7 +32,7 @@ python2 ~/IR2/main.py --n_heads $3 --result_path $OUTPUTDIR --predict --model_na
 python2 ~/IR2/prepare_rouge.py --result_path $OUTPUTDIR
 
 
-python2 ~/IR2/ngram_overlap.py $OUTPUTDIR ~/deepmind/train_set/train.pkl > $OUTPUTDIR/ngramoverlap
+python2 ~/IR2/ngram_overlap.py $OUTPUTDIR ~/deepmind/test_set/test.pkl > $OUTPUTDIR/ngramoverlap
 cat $OUTPUTDIR/ngramoverlap
 rm $OUTPUTDIR/generated.txt
 rm $OUTPUTDIR/targets.txt
