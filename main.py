@@ -735,13 +735,13 @@ def run():
 
                     if not opt.debug:
                         print "save model... ",
-                        pickle.dump([all_losses, p_points], open(opt.model_path + '/losses_p_points.p', 'wb'))
+                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
                         save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
                         print "finished"
 
             print "save final model... ",
             save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-            pickle.dump([all_losses, p_points], open(opt.model_path + '/losses_p_points.p', 'wb'))
+            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
             print "finished"
         else:
             print "skip training model"
