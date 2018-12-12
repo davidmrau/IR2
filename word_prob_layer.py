@@ -53,7 +53,7 @@ class WordProbLayer(nn.Module):
                 p_vocab = T.cat((p_vocab, ext_zeros), 2)
             p_gen = T.sigmoid(F.linear(h, self.v, self.bv))
             # NOTE: we get NaNs if we multiply p_gen_mask_set_to_one with 1
-            if dropout_p_point != 0.0:
+            if dropout_p_point is not None and dropout_p_point != 0.0:
                 p_gen_mask_set_to_one = (torch.rand_like(p_gen) < dropout_p_point).float()
                 p_gen = p_gen * (1 - p_gen_mask_set_to_one) + 0.999 * p_gen_mask_set_to_one
             p_gen = torch.clamp(p_gen,0.001, 0.999)
