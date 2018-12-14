@@ -623,9 +623,9 @@ def run():
             if opt.retrain:
                 # update optimizer, because network contains now coverage weights if coverage is on
                 optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
-            if continue_training and not opt.predict:
-                continuing = True
-                print('Continue training model from step {}'.format(continue_step))
+        if continue_training and not opt.predict:
+            continuing = True
+            print('Continue training model from step {}'.format(continue_step))
         if not opt.predict:
             print "start training model "
             print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
@@ -740,7 +740,6 @@ def run():
                         pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
                         save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
                         print "finished"
-
             print "save final model... ",
             save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
             pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
