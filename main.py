@@ -646,6 +646,7 @@ def run():
                 # shuffle the trainset
                 batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
                 used_batch = 0.
+                y_pred = None
                  
                 for idx_batch in xrange(num_batches):
                     if continue_training and steps <= continue_step:
@@ -727,23 +728,23 @@ def run():
                         num_partial += 1
                     init_seeds(steps)
                     steps += 1
-
                 if not continuing:
                     print("in this epoch:")
                     print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch,*av_batch_losses/used_batch))
                     print "time:", time.time() - epoch_start
-            
-                    print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
+                    if y_pred is not None: 
+                        print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
 
-                    if not opt.debug:
-                        print "save model... ",
-                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
-                        save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-                        print "finished"
-            print "save final model... ",
-            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
-            print "finished"
+                        if not opt.debug:
+                            print "save model... ",
+                            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+                            save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
+                            print "finished"
+            if not opt.debug:
+                print "save final model... ",
+                save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
+                pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
+                print "finished"
         else:
             print "skip training model"
 
