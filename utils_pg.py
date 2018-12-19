@@ -81,7 +81,7 @@ def load_model(f, model, optimizer):
     return model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points
 
 def sort_samples(x, len_x, mask_x, y, len_y, \
-                 mask_y, oys, x_ext, y_ext, oovs, return_idx=False):
+                 mask_y, oys, oxs, x_ext, y_ext, oovs, return_idx=False):
     sorted_x_idx = np.argsort(len_x)[::-1]
 
     sorted_x_len = np.array(len_x)[sorted_x_idx]
@@ -93,16 +93,17 @@ def sort_samples(x, len_x, mask_x, y, len_y, \
     sorted_y = y[:, sorted_x_idx]
     sorted_y_mask = mask_y[:, sorted_x_idx, :]
     sorted_oys = [oys[i] for i in sorted_x_idx]
+    sorted_oxs = [oxs[i] for i in sorted_x_idx]
     sorted_x_ext = x_ext[:, sorted_x_idx]
     sorted_y_ext = y_ext[:, sorted_x_idx]
 
     if return_idx:
         return sorted_x, sorted_x_len, sorted_x_mask, sorted_y, \
-            sorted_y_len, sorted_y_mask, sorted_oys, \
+            sorted_y_len, sorted_y_mask, sorted_oys, sorted_oxs, \
             sorted_x_ext, sorted_y_ext, sorted_oovs, sorted_x_idx
     else:
         return sorted_x, sorted_x_len, sorted_x_mask, sorted_y, \
-            sorted_y_len, sorted_y_mask, sorted_oys, \
+            sorted_y_len, sorted_y_mask, sorted_oys, sorted_oxs, \
             sorted_x_ext, sorted_y_ext, sorted_oovs
 
 def print_sent_dec(y_pred, y, y_mask, oovs, modules, consts, options, batch_size):

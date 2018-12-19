@@ -159,8 +159,8 @@ class LSTMAttentionDecoder(nn.Module):
         if self.copy and self.coverage:
             return (hs, cs), ss, atts, dists, xids, Cs
         elif self.copy:
-            return (hs, cs), ss, atts, dists, xids
+            return (hs, cs), ss, atts, dists, xid
         elif self.coverage:
-            return (hs, cs), ss, atts, dists, Cs
+            return (hs, cs), ss, atts, dists, C
         else:
             return (hs, cs), ss, atts

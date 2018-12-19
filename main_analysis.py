@@ -17,9 +17,9 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import data as datar
-from model import *
+from model_analysis import *
 from utils_pg import *
-from configs import *
+from configs_analysis import *
 import re
 import argparse
 
@@ -155,12 +155,15 @@ def init_modules():
     consts["n_heads"] = cfg.N_HEADS
     consts["dropout_p_point"] = opt.dropout_p_point
 
-    consts["batch_size"] = 5 if opt.debug else TRAINING_DATASET_CLS.BATCH_SIZE
+    consts["batch_size"] = 1 if opt.debug else TRAINING_DATASET_CLS.BATCH_SIZE
+    # TODO remove this
+    consts["testing_batch_size"] = 1 if options["beam_decoding"] else 1
     if opt.debug:
-        consts["testing_batch_size"] = 1 if options["beam_decoding"] else 2
+        consts["testing_batch_size"] = 1 if options["beam_decoding"] else 1
     else:
         #consts["testing_batch_size"] = 1 if options["beam_decoding"] else TESTING_DATASET_CLS.BATCH_SIZE
-        consts["testing_batch_size"] = TESTING_DATASET_CLS.BATCH_SIZE
+        #consts["testing_batch_size"] = TESTING_DATASET_CLS.BATCH_SIZE
+        pass
 
     consts["min_len_predict"] = TESTING_DATASET_CLS.MIN_LEN_PREDICT
     consts["max_len_predict"] = TESTING_DATASET_CLS.MAX_LEN_PREDICT
@@ -188,19 +191,12 @@ def init_modules():
     modules["lfw_emb"] = modules["w2i"][cfg.W_UNK]
     modules["eos_emb"] = modules["w2i"][cfg.W_EOS]
     consts["pad_token_idx"] = modules["w2i"][cfg.W_PAD]
-    
+
     if opt.model_folder:
         cfg.cc.MODEL_PATH = opt.model_folder
     return modules, consts, options
-def teacher_forcing_ratio(steps, offset):
-    if steps < offset:
-        return False
-    else:
-        prob_tf =  100/(100 + np.exp(steps-offset/step_size))
-        return random.random() < prob_tf
 
-
-def greedy_decode(flist, batch, model, modules, consts, options):
+def greedy_decode(flist, batch, model, modules, consts, options, ox):
     testing_batch_size = len(flist)
 
     dec_result = [[] for i in xrange(testing_batch_size)]
@@ -219,15 +215,23 @@ def greedy_decode(flist, batch, model, modules, consts, options):
     if options["coverage"]:
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
 
+    p_points = []
+    attn_dists = []
     for step in xrange(consts["max_len_predict"]):
         if num_left == 0:
             break
         if options["copy"] and options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len, acc_att)
+            y_pred, dec_state, acc_att, p_point, attn_dist = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len, acc_att)
+            p_points.append(1-p_point)
+            attn_dists.append(attn_dist)
         elif options["copy"]:
-            y_pred, dec_state = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len)
+            y_pred, dec_state, _, p_point, attn_dist  = model.decode_once(next_y, word_emb, dec_state, x_mask, x, max_ext_len)
+            p_points.append(1-p_point)
+            attn_dists.append(attn_dist)
         elif options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, word_emb, dec_state, x_mask, acc_att=acc_att)
+            y_pred, dec_state, acc_att, p_point, attn_dist = model.decode_once(next_y, word_emb, dec_state, x_mask, acc_att=acc_att)
+            p_points.append(1-p_point)
+            attn_dists.append(attn_dist)
         else:
             y_pred, dec_state = model.decode_once(next_y, word_emb, dec_state, x_mask)
 
@@ -292,7 +296,8 @@ def greedy_decode(flist, batch, model, modules, consts, options):
                     dec_words.append(modules["i2w"][e])
                 else:
                     dec_words.append(oovs[e - len(modules["i2w"])])
-            write_for_rouge(fname, ref_sents[idx_doc], dec_words, cfg)
+            model.write_for_attnvis(ox[0], ref_sents[0][0], dec_words, attn_dists, p_points, oovs)
+
         else:
             print "ERROR: " + fname
 
@@ -327,20 +332,22 @@ def beam_decode(fname, batch, model, modules, consts, options):
         acc_att = Variable(torch.zeros(T.transpose(x, 0, 1).size())).to(options["device"]) # B *len(x)
         last_acc_att = []
 
+    p_points = []
     for step in xrange(consts["max_len_predict"]):
         tile_word_emb = word_emb.repeat(1, num_live, 1)
         tile_x_mask = x_mask.repeat(1, num_live, 1)
         if options["copy"]:
             tile_x = x.repeat(1, num_live)
-
         if options["copy"] and options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len, acc_att=acc_att)
+            y_pred, dec_state, acc_att, p_point, att_dist, all_attn = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len, acc_att=acc_att, ref_sents=ref_sents)
         elif options["copy"]:
-            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len)
+            # TODO fix new retun args for decode_once
+            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, x=tile_x, max_ext_len=max_ext_len,ref_sents=ref_sents)
         elif options["coverage"]:
-            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, acc_att=acc_att)
+            # TODO fix new retun args for decode_once
+            y_pred, dec_state, acc_att = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, acc_att=acc_att, ref_sents=ref_sents)
         else:
-            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask)
+            y_pred, dec_state = model.decode_once(next_y, tile_word_emb, dec_state, tile_x_mask, ref_sents=ref_sents)
         dict_size = y_pred.shape[-1]
         y_pred = y_pred.view(num_live, dict_size)
         if options["coverage"]:
@@ -426,7 +433,6 @@ def beam_decode(fname, batch, model, modules, consts, options):
         for i in xrange(num_live):
             samples.append([str(e.item()) for e in last_traces[i]])
             sample_scores[num_dead] = last_scores[i]
-            num_dead += 1
 
     #weight by length
     for i in xrange(len(sample_scores)):
@@ -474,7 +480,6 @@ def beam_decode(fname, batch, model, modules, consts, options):
                 if b > consts["max_byte_predict"]:
                     sorted_samples[i] = sorted_samples[i][0 : j]
                     break
-
     dec_words = []
 
     for e in sorted_samples[-1]:
@@ -483,14 +488,7 @@ def beam_decode(fname, batch, model, modules, consts, options):
             dec_words.append(modules["i2w"][e])
         else:
             dec_words.append(oovs[e - len(modules["i2w"])])
-
-    write_for_rouge(fname, ref_sents, dec_words, cfg)
-
-    # beam search history for checking
-    if not options["copy"]:
-        oovs = None
-    write_summ("".join((cfg.cc.BEAM_SUMM_PATH, fname)), sorted_samples, num_samples, options, modules["i2w"], oovs, sorted_scores)
-    write_summ("".join((cfg.cc.BEAM_GT_PATH, fname)), y_true, 1, options, modules["i2w"], oovs)
+            num_dead += 1
 
 
 def predict(model, modules, consts, options):
@@ -509,9 +507,9 @@ def predict(model, modules, consts, options):
     if opt.debug:
         xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
     else:
-        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test.pkl", "r"))
+        xy_list = pickle.load(open(cfg.cc.TESTING_DATA_PATH + "test_500.pkl", "r"))
     batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
-    
+
     # Save order of batches for ngram overlap
     batches_sorted_idx = []
 
@@ -530,10 +528,10 @@ def predict(model, modules, consts, options):
 
         x, len_x, x_mask, y, len_y, y_mask, oy, ox, x_ext, y_ext, oovs, batch_sorted_idx = sort_samples(batch.x, batch.len_x, \
                                                              batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
-                                                             batch.original_summarys, batch.original_contents, batch.x_ext, batch.y_ext, batch.x_ext_words, 
+                                                             batch.original_summarys, batch.original_contents, batch.x_ext, batch.y_ext, batch.x_ext_words,
                                                              return_idx=True)
         batches_sorted_idx.append(batch_sorted_idx)
-        
+
 
         word_emb, dec_state = model.encode(torch.LongTensor(x).to(options["device"]),\
                                            torch.LongTensor(len_x).to(options["device"]),\
@@ -557,7 +555,7 @@ def predict(model, modules, consts, options):
                           torch.FloatTensor(x_mask).to(options["device"]), y, len_y, oy, batch.max_ext_len, oovs)
             else:
                 inputx = (torch.LongTensor(x).to(options["device"]), word_emb, dec_state, torch.FloatTensor(x_mask).to(options["device"]), y, len_y, oy)
-            greedy_decode(test_idx, inputx, model, modules, consts, options)
+            greedy_decode(test_idx, inputx, model, modules, consts, options, ox)
             si += len(test_idx)
 
         testing_batch_size = len(test_idx)
@@ -566,190 +564,36 @@ def predict(model, modules, consts, options):
         if partial_num >= consts["testing_print_size"]:
             print total_num, "summs are generated"
             partial_num = 0
-    pickle.dump(batches_sorted_idx, open(opt.output_dir + '/test_batch_order.pkl', 'wb'))
     print si, total_num
 
 def run():
-
-    all_losses = []
-    p_points = []
-    continuing = False
     modules, consts, options = init_modules()
 
     #use_gpu(consts["idx_gpu"])
     print_basic_info(modules, consts, options)
 
-    if not opt.predict:
-        print "loading train set..."
-        if opt.debug:
-            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train_small.pkl", "r"))
-        else:
-            xy_list = pickle.load(open(cfg.cc.TRAINING_DATA_PATH + "train.pkl", "r"))
-        batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
-        print "num_files = ", num_files, ", num_batches = ", num_batches
-
     running_start = time.time()
-    if True: #TODO: refactor
-        print('model_path', cfg.cc.MODEL_PATH)
-        continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
-        options['continue_training'] = continue_training
-        print "compiling model ..."
-        model = Model(modules, consts, options)
-        if options["cuda"]:
-            model.cuda()
 
-        optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
-        existing_epoch = 0
-        if continue_training or opt.predict or opt.retrain:
-            if opt.model_name == '':
-                opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
-                continue_step = int(re.match('.*step(\d+)',opt.model_name).groups()[0])
-                name = cfg.cc.MODEL_PATH + opt.model_name
-            else:
-                continue_step = 0
-                name = opt.model_name
-            print "loading existed model:", name
-            model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(name, model, optimizer)
-        if opt.retrain:
-            av_batch_losses = np.zeros(5)
-            av_batch_p_points = np.zeros(1)
-            all_losses = []
-            p_points = []
-            if options['coverage']:
-                model.decoder.add_cov_weight()
-                if options['cuda']:
-                    model.cuda()
-            print(model)
-            if opt.retrain:
-                # update optimizer, because network contains now coverage weights if coverage is on
-                optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
-            if continue_training and not opt.predict:
-                continuing = True
-                print('Continue training model from step {}'.format(continue_step))
-        if not opt.predict:
-            print "start training model "
-            print_size = num_files / consts["print_time"] if num_files >= consts["print_time"] else num_files
-            steps = 0
-            print(model)
-            # cnndm.s2s.lstm.gpu0.epoch0.7
-            last_total_error = float("inf")
-            print "max epoch:", consts["max_epoch"]
-            for epoch in xrange(0, consts["max_epoch"]):
-                print "epoch: ", epoch + existing_epoch
-                num_partial = 1
-                if not continuing:
-                    av_batch_losses = np.zeros(5) 
-                    av_batch_p_points = np.zeros(1)
-                partial_num_files = 0
-                epoch_start = time.time()
-                partial_start = time.time()
-                # shuffle the trainset
-                batch_list, num_files, num_batches = datar.batched(len(xy_list), options, consts)
-                used_batch = 0.
-                 
-                for idx_batch in xrange(num_batches):
-                    if continue_training and steps <= continue_step:
-                        used_batch += 1
-                        init_seeds(steps)
-                        steps += 1
-                        partial_num_files += consts["batch_size"]
-                        if partial_num_files % print_size == 0 and idx_batch < num_batches:
-                            partial_num_files =0
-                            num_partial += 1
+    print('model_path', cfg.cc.MODEL_PATH)
+    continue_training = len(os.listdir(cfg.cc.MODEL_PATH)) !=0
+    options['continue_training'] = continue_training
+    print "compiling model ..."
+    model = Model(modules, consts, options)
+    if options["cuda"]:
+        model.cuda()
 
-                        if steps == continue_step:
-                            continuing = False
-                        continue
-                    else:
-                        continuing = False
-
-                    train_idx = batch_list[idx_batch]
-                    batch_raw = [xy_list[xy_idx] for xy_idx in train_idx]
-                    if len(batch_raw) != consts["batch_size"]:
-                        continue
-                    local_batch_size = len(batch_raw)
-                    batch = datar.get_data(batch_raw, modules, consts, options)
-
-                    x, len_x, x_mask, y, len_y, y_mask, oy, x_ext, y_ext, oovs = sort_samples(batch.x, batch.len_x, \
-                                                             batch.x_mask, batch.y, batch.len_y, batch.y_mask, \
-                                                             batch.original_summarys, batch.x_ext, batch.y_ext, batch.x_ext_words)
-
-                    model.zero_grad()
-
-                    if opt.tf_schedule:
-                        tf = teacher_forcing_ratio(steps, options["tf_offset_decay"])
-                    else:
-                        tf = True
-                    y_pred, losses, p_point = model(torch.LongTensor(x).to(options["device"]), torch.LongTensor(len_x).to(options["device"]),\
-                                   torch.LongTensor(y).to(options["device"]),  torch.FloatTensor(x_mask).to(options["device"]), \
-                                   torch.FloatTensor(y_mask).to(options["device"]), torch.LongTensor(x_ext).to(options["device"]),\
-                                   torch.LongTensor(y_ext).to(options["device"]), \
-                                   batch.max_ext_len)
-                    total_loss = 0
-                    # TODO: implement averge batch costs
-                    for loss_ in losses:
-                        if loss_ is not None:
-                            total_loss += loss_
-
-                    total_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), consts["norm_clip"])
-                    optimizer.step()
-
-                    # append total loss to losses
-                    losses = np.append(total_loss.item(), losses)
-
-                    # transform tensors to floats
-                    losses = [loss.cpu().detach().numpy() if isinstance(loss, torch.Tensor) else loss for loss in losses]
-
-                   # with open(opt.result_path + '/result.log', "a") as log_file:
-                   #     log_file.write("epoch {}, step {}, total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}\n".format(epoch, steps,*losses))
-
-                    # if new batch reset
-                    # add current losses to av_batch_losses
-
-                    av_batch_losses = np.add(av_batch_losses, losses)
-                    av_batch_p_points = np.add(av_batch_p_points, p_point)
-                    used_batch += 1
-                    partial_num_files += consts["batch_size"]
-                    if partial_num_files % print_size == 0 and idx_batch < num_batches:
-                        print("Step: {}").format(steps)
-
-                        print idx_batch + 1, "/" , num_batches, "batches have been processed,",
-                        print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch, *av_batch_losses/used_batch))
-                        print "time:", time.time() - partial_start
-                        partial_num_files = 0
-                        if not opt.debug:
-                            print "save model... ",
-                            save_model(cfg.cc.MODEL_PATH+ "model.gpu" + str(consts["idx_gpu"]) +".epoch"+str(epoch) + ".step"+str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-                            all_losses.append(av_batch_losses/used_batch)
-                            p_points.append(av_batch_p_points/used_batch)
-                            print "finished"
-                        num_partial += 1
-                    init_seeds(steps)
-                    steps += 1
-
-                if not continuing:
-                    print("in this epoch:")
-                    print("av_batchp_point {}, av_batch: total_loss {}, loss {}, cost_cov {}, cost_p_point {}, cost_w_prior {}".format(av_batch_p_points/used_batch,*av_batch_losses/used_batch))
-                    print "time:", time.time() - epoch_start
-            
-                    print_sent_dec(y_pred, y_ext, y_mask, oovs, modules, consts, options, local_batch_size)
-
-                    if not opt.debug:
-                        print "save model... ",
-                        pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
-                        save_model(cfg.cc.MODEL_PATH +"model.gpu" + str(consts["idx_gpu"]) + ".epoch"+str(epoch) +  ".step" + str(steps), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-                        print "finished"
-
-            print "save final model... ",
-            save_model(cfg.cc.MODEL_PATH + "model.final.gpu" + str(consts["idx_gpu"]), model, optimizer, all_losses, av_batch_losses, p_points, av_batch_p_points)
-            pickle.dump([all_losses, p_points], open(opt.result_path + '/losses_p_points.p', 'wb'))
-            print "finished"
+    optimizer = torch.optim.Adagrad(model.parameters(), lr=consts["lr"], initial_accumulator_value=0.1)
+    if continue_training or opt.predict or opt.retrain:
+        if opt.model_name == '':
+            opt.model_name = list(reversed(sorted(os.listdir(cfg.cc.MODEL_PATH), key=lambda x: int(re.match('.*step(\d+)', x).groups()[0]))))[0]
+            name = cfg.cc.MODEL_PATH + opt.model_name
         else:
-            print "skip training model"
+            name = opt.model_name
+        print "loading existed model:", name
+        model, optimizer, all_losses, av_batch_losses, p_points , av_batch_p_points= load_model(name, model, optimizer)
 
-        if opt.predict:
-            predict(model, modules, consts, options)
+    predict(model, modules, consts, options)
+
     print "Finished, time:", time.time() - running_start
 
 if __name__ == "__main__":
