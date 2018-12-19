@@ -3,6 +3,7 @@ from nltk import tokenize
 import glob, sys, os, pickle
 import itertools
 import numpy as np
+import collections
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -41,6 +42,12 @@ def restore_order(batch_order):
     batch_size = len(batch_order[0])
     return [batch_order[i] + batch_size*i for i in xrange(len(batch_order))]
 
+def calc_new_words(summary, target):
+    summary_words_counts = collections.Counter(tokenize.word_tokenize(summary))
+    target_words_counts = collections.Counter(tokenize.word_tokenize(target))
+
+    return summary_words_counts - target_words_counts
+
 def main(folder, data_path):
     # Load test data
     with open(data_path, 'r') as f:
@@ -60,11 +67,14 @@ def main(folder, data_path):
     # Calculate novel ngrams and sentences for each summary
     ng_overlaps = {i:0 for i in range(1, 5)}
     sent_overlaps = 0
+    new_words = collections.Counter()
     for i in xrange(len(sum_files)):
         with open(sum_files[i], 'r') as f:
             summ = f.readlines()[-1].split(' ', 1)[1].decode('utf-8')
 
         source = data[order[i]][0][1].decode('utf-8')
+
+        new_words += calc_new_words(summ, source)
 
         for o in range(1, 5):
             no = ngram_overlap(summ, source, o)
@@ -78,6 +88,8 @@ def main(folder, data_path):
         print('novel {}-grams:\t{:.4f}'.format(i, mean_i))
     mean_s = sent_overlaps / float(len(sum_files))
     print('novel sentences:{:.4f}'.format(mean_s))
+    print('Most frequent new words', new_words.most_common(20))
+
 
 if __name__ == "__main__":
     folder = sys.argv[1]
