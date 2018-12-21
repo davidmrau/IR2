@@ -26,11 +26,15 @@ def ngram_overlap(summary, order):
         sum_ng = make_ngrams(tokenize.word_tokenize(summary), order)
     total_ngrams = float(sum(sum_ng.values()))
     unique_ngrams = float(len(sum_ng.keys()))
+    if total_ngrams == 0:
+        return 0.0
+
     return (total_ngrams -unique_ngrams)/total_ngrams
 
-def main(folder, stop_after=1e9):
+def main(folder, stop_after):
     # Load summaries
-    sum_files = glob.glob(os.path.join(folder, 'beam_summary/*'))
+    folder=os.path.join(folder, '*')
+    sum_files = glob.glob(folder)
     sum_files = {int(os.path.basename(f)): f for f in sum_files}
 
     # Calculate novel ngrams and sentences for each summary
@@ -45,7 +49,7 @@ def main(folder, stop_after=1e9):
         for o in ng_overlaps.keys():
             # TEST should be zero
             #no = ngram_overlap('The boy walks with his dog to the park', o)
-            # TEST should be low, no overlap
+            # TEST should be low, one bi-gram overlap, two single gram overlap
             #no = ngram_overlap('The boy walks with his dog his dog to the park', o)
             # TEST should be high, the first 'the' is non repetitve, all the others do overlap
             # no = ngram_overlap('the the the the the', o)
@@ -67,5 +71,5 @@ if __name__ == "__main__":
         exit(1)
 
     folder = sys.argv[1]
-    stop_after = int(sys.argv[2]) if len(sys.argv) == 3 else None
+    stop_after = int(sys.argv[2]) if len(sys.argv) == 3 else 1e9
     main(folder, stop_after)
