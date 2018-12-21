@@ -33,31 +33,34 @@ def ngram_overlap(summary, order):
 
 def main(folder, stop_after):
     # Load summaries
-    folder=os.path.join(folder, '*')
-    sum_files = glob.glob(folder)
-    sum_files = {int(os.path.basename(f)): f for f in sum_files}
+    #folder=os.path.join(folder, '*')
+    #sum_files = glob.glob(folder)
+    #sum_files = {int(os.path.basename(f)): f for f in sum_files}
 
     # Calculate novel ngrams and sentences for each summary
     ng_overlaps = {i:0 for i in list(range(1, 5)) + ['sen']}
     # ng_overlaps = {i:0 for i in list(range(1, 3))}
     files_done = 0
-    for i in xrange(len(sum_files)):
-        with open(sum_files[i], 'r') as f:
-            summ = f.readlines()[-1].strip().split(' ', 1)[1].decode('utf-8')
+    summaries = open(folder + 'generated.txt').readlines()
+    for summ in summaries:
+    #for i in range(len(sum_files)):
+       # with open(sum_files[i], 'r') as f:
+            #summ = f.readlines()[-1].strip().split(' ', 1)[1].decode('utf-8')
+            summ = summ.decode('utf-8')
             files_done += 1
 
-        for o in ng_overlaps.keys():
-            # TEST should be zero
-            #no = ngram_overlap('The boy walks with his dog to the park', o)
-            # TEST should be low, one bi-gram overlap, two single gram overlap
-            #no = ngram_overlap('The boy walks with his dog his dog to the park', o)
-            # TEST should be high, the first 'the' is non repetitve, all the others do overlap
-            # no = ngram_overlap('the the the the the', o)
+            for o in ng_overlaps.keys():
+                # TEST should be zero
+                #no = ngram_overlap('The boy walks with his dog to the park', o)
+                # TEST should be low, one bi-gram overlap, two single gram overlap
+                #no = ngram_overlap('The boy walks with his dog his dog to the park', o)
+                # TEST should be high, the first 'the' is non repetitve, all the others do overlap
+                # no = ngram_overlap('the the the the the', o)
 
-            no = ngram_overlap(summ, o)
-            ng_overlaps[o] += no
-        if files_done >= stop_after:
-            break
+                no = ngram_overlap(summ, o)
+                ng_overlaps[o] += no
+            if files_done >= stop_after:
+                break
 
     # Print results  
     print('Processed {} files'.format(files_done))
